@@ -41,19 +41,25 @@ impl Default for Chip8 {
     }
 }
 
+// TODO: replace with frame iterators? how to handle input
 fn start(file_name: &std::path::Path) {
     let mut emulator: Chip8 = Default::default();
+
     // Read file to memory
     let mut file_content = BufReader::new(File::open(file_name).unwrap());
-    // start timers (delay and sound)
+    // start timers (delay and sound) - wrap chip in arc
     // parse file?
-    // execution loop -> Fetch -> Decode -> Execute
-    let mut rdr = Cursor::new([0u8; 2]);
+    let mut rdr = [0u8; 2];
     loop {
         let start_iter = Instant::now();
-        file_content.read_exact(rdr.get_mut()).unwrap();
-        let inst = Instruction::new(rdr.read_u16::<byteorder::NativeEndian>().unwrap()).unwrap(); // replace with try_into with crate
+
+        file_content.read_exact(&mut rdr).unwrap();
+        let opcode: u16 = rdr[0] as u16 | ((rdr[1] as u16) << 8);
+        let inst = Instruction::from(opcode);
+
+        emulator.pc += rdr.len();
         execute_instruction(&mut emulator, inst);
+
         // Delay iteration of the loop, use 500HZ or https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
         thread::sleep(Duration::from_millis(2) - start_iter.elapsed());
     }

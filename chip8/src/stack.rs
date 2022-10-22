@@ -55,7 +55,7 @@ mod tests {
     // #[should_panic]
     fn full_stack_err() {
         let mut s = Stack::default();
-        for i in 0..s.storage.len() as u16{
+        for i in 0..s.storage.len() as u16 {
             assert_eq!(Ok(()), s.push(i));
         }
     }

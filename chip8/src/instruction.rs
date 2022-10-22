@@ -1,48 +1,101 @@
-// TODO: read how to decode with http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0 
-pub enum Instruction{
-// 0nnn - SYS addr
-// 00E0 - CLS
-// 00EE - RET
-// 1nnn - JP addr
-// 2nnn - CALL addr
-// 3xkk - SE Vx, byte
-// 4xkk - SNE Vx, byte
-// 5xy0 - SE Vx, Vy
-// 6xkk - LD Vx, byte
-// 7xkk - ADD Vx, byte
-// 8xy0 - LD Vx, Vy
-// 8xy1 - OR Vx, Vy
-// 8xy2 - AND Vx, Vy
-// 8xy3 - XOR Vx, Vy
-// 8xy4 - ADD Vx, Vy
-// 8xy5 - SUB Vx, Vy
-// 8xy6 - SHR Vx {, Vy}
-// 8xy7 - SUBN Vx, Vy
-// 8xyE - SHL Vx {, Vy}
-// 9xy0 - SNE Vx, Vy
-// Annn - LD I, addr
-// Bnnn - JP V0, addr
-// Cxkk - RND Vx, byte
-// Dxyn - DRW Vx, Vy, nibble
-// Ex9E - SKP Vx
-// ExA1 - SKNP Vx
-// Fx07 - LD Vx, DT
-// Fx0A - LD Vx, K
-// Fx15 - LD DT, Vx
-// Fx18 - LD ST, Vx
-// Fx1E - ADD I, Vx
-// Fx29 - LD F, Vx
-// Fx33 - LD B, Vx
-// Fx55 - LD [I], Vx
-// Fx65 - LD Vx, [I]
-// 00Cn - SCD nibble
-// 00FB - SCR
-// 00FC - SCL
-// 00FD - EXIT
-// 00FE - LOW
-// 00FF - HIGH
-// Dxy0 - DRW Vx, Vy, 0
-// Fx30 - LD HF, Vx
-// Fx75 - LD R, Vx
-// Fx85 - LD Vx, R
+// TODO: read how to decode with http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
+#[allow(clippy::upper_case_acronyms)]
+pub enum Instruction {
+    CLS,
+    RET,
+    SysJump(u16),
+    JP(u16),
+    LDReadRegisters(u8),
+    LDStoreRegisters(u8),
+    LDStoreBCD(u8),
+    LDSetISprite(u8),
+    ADDI(u8),
+    LDSetST(u8),
+    LDSetDT(u8),
+    LDKeyPress(u8),
+    LDGetDT(u8),
+    SKNP(u8),
+    SKP(u8),
+    DRW(u8, u8),
+    RND(u8, u8),
+    LDSetIAddr(u16),
+    SHL(u8, u8),
+    SUBN(u8, u8),
+    SHR(u8, u8),
+    SUB(u8, u8),
+    XOR(u8, u8),
+    AND(u8, u8),
+    OR(u8, u8),
+    LDSetNibbles(u8, u8),
+    ADD(u8, u8),
+    LD(u8, u8),
+    SENibble(u8, u8),
+    SNE(u8, u8),
+    SEByte(u8, u8),
+    CALL(u16),
+}
+
+impl From<u16> for Instruction {
+    fn from(opcode: u16) -> Self {
+        match opcode & 0xF000 {
+            0x0 => match opcode {
+                0x00E0 => Instruction::CLS,
+                0x00EE => Instruction::RET,
+                _ => Instruction::SysJump(opcode & 0xFFF),
+            },
+            0x1 => Instruction::JP(opcode & 0xFFF),
+            0x2 => Instruction::CALL(opcode & 0xFFF),
+            0x3 => Instruction::SEByte((opcode >> 8) as u8 & 0x0F, opcode as u8),
+            0x4 => Instruction::SNE((opcode >> 8) as u8 & 0x0F, opcode as u8),
+            0x5 => Instruction::SENibble((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+            0x6 => Instruction::LD((opcode >> 8) as u8 & 0x0F, opcode as u8),
+            0x7 => Instruction::ADD((opcode >> 8) as u8 & 0x0F, opcode as u8),
+            0x8 => match opcode & 0xF {
+                0x0 => Instruction::LDSetNibbles((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x1 => Instruction::OR((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x2 => Instruction::AND((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x3 => Instruction::XOR((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x4 => Instruction::ADD((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x5 => Instruction::SUB((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x6 => Instruction::SHR((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0x7 => Instruction::SUBN((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                0xE => Instruction::SHL((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+                _ => panic!(),
+            },
+            0x9 => Instruction::SNE((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+            0xA => Instruction::LDSetIAddr(opcode & 0xFFF),
+            0xB => Instruction::JP(opcode & 0xFFF),
+            0xC => Instruction::RND((opcode >> 8) as u8 & 0x0F, opcode as u8),
+            0xD => Instruction::DRW((opcode >> 8) as u8 & 0x0F, opcode as u8 & 0xF0),
+            0xE => match opcode & 0x00FF {
+                0x9E => Instruction::SKP((opcode >> 8) as u8 & 0x0F),
+                0xA1E => Instruction::SKNP((opcode >> 8) as u8 & 0x0F),
+                _ => panic!(),
+            },
+            0xF => match opcode & 0x00FF {
+                0x7 => Instruction::LDGetDT((opcode >> 8) as u8 & 0xF),
+                0xA => Instruction::LDKeyPress((opcode >> 8) as u8 & 0xF),
+                0x15 => Instruction::LDSetDT((opcode >> 8) as u8 & 0xF),
+                0x18 => Instruction::LDSetST((opcode >> 8) as u8 & 0xF),
+                0x1E => Instruction::ADDI((opcode >> 8) as u8 & 0xF),
+                0x29 => Instruction::LDSetISprite((opcode >> 8) as u8 & 0xF),
+                0x33 => Instruction::LDStoreBCD((opcode >> 8) as u8 & 0xF),
+                0x55 => Instruction::LDStoreRegisters((opcode >> 8) as u8 & 0xF),
+                0x65 => Instruction::LDReadRegisters((opcode >> 8) as u8 & 0xF),
+                _ => panic!(),
+            },
+            _ => panic!(),
+            // TODO: add Super chip-48 Instructions
+            // 0x0 => Instruction::SCD,
+            // 0x0 => Instruction::SCR,
+            // 0x0 => Instruction::SCL,
+            // 0x0 => Instruction::EXIT,
+            // 0x0 => Instruction::LOW,
+            // 0x0 => Instruction::HIGH,
+            // 0xD => Instruction::DRW,
+            // 0xF => Instruction::LD,
+            // 0xF => Instruction::LD,
+            // 0xF => Instruction::LD,
+        }
+    }
 }
