@@ -17,13 +17,20 @@ impl Stack {
         Ok(())
     }
 
-    pub fn pop(&mut self) -> Option<u16> {
+    pub fn pop(&mut self) -> Result<u16, &'static str> {
         match self.sp {
-            0 => None,
+            0 => Err("Empty Stack"),
             _ => {
                 self.sp -= 1;
-                Some(self.storage[self.sp])
+                Ok(self.storage[self.sp])
             }
+        }
+    }
+
+    pub fn top(&self) -> Option<u16> {
+        match self.sp {
+            0 => None,
+            _ => Some(self.storage[self.sp - 1]),
         }
     }
 }
@@ -45,18 +52,27 @@ mod tests {
     #[test]
     fn empty_pop() {
         let mut s = Stack::default();
-        s.push(1);
+        s.push(1).unwrap();
         assert_eq!(Some(1), s.pop());
         assert_eq!(None, s.pop());
         assert_eq!(None, s.pop());
     }
 
     #[test]
-    // #[should_panic]
+    #[should_panic]
     fn full_stack_err() {
         let mut s = Stack::default();
-        for i in 0..s.storage.len() as u16 {
+        for i in 0..(s.storage.len() + 1) as u16 {
             assert_eq!(Ok(()), s.push(i));
         }
+    }
+
+    #[test]
+    fn top() {
+        let mut s = Stack::default();
+        s.push(6).unwrap();
+        assert_eq!(Some(6), s.top());
+        s.pop().unwrap();
+        assert_eq!(None, s.top());
     }
 }
