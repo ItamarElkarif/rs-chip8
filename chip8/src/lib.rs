@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use crate::display::{Display, SCREEN_HEIGHT, SCREEN_WIDTH};
+pub use display::{DisplayData, UI};
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -7,39 +9,53 @@ use std::{
 };
 
 pub const MEM_SIZE: usize = 4 * 1024;
-pub const SCREEN_WIDTH: usize = 64;
-pub const SCREEN_HEIGHT: usize = 32;
 
 mod instruction;
 use instruction::Instruction;
 mod stack;
 
-pub struct Display {
-    data: [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH],
-    updated: bool,
-}
-
-impl Display {
-    fn mut_data_to_update(&mut self) -> &mut [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
-        self.updated = true;
-        &mut self.data
+mod display {
+    pub const SCREEN_WIDTH: usize = 64;
+    pub const SCREEN_HEIGHT: usize = 32;
+    pub type DisplayData = [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH];
+    pub trait UI {
+        fn update(&mut self, display: &DisplayData);
     }
 
-    fn data(&self) -> &[[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
-        &self.data
+    pub struct Display {
+        data: DisplayData,
+        updated: bool,
     }
 
-    fn reset_update(&mut self) {
-        self.updated = false;
+    impl Display {
+        pub fn mut_data_to_update(&mut self) -> &mut [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
+            self.updated = true;
+            &mut self.data
+        }
+
+        pub fn data(&self) -> &[[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
+            &self.data
+        }
+
+        pub fn updated(&self) -> bool {
+            self.updated
+        }
+
+        pub fn reset_updated(&mut self) {
+            self.updated = false;
+        }
     }
 
-    fn default() -> Display {
-        Display {
-            data: [[false; SCREEN_HEIGHT]; SCREEN_WIDTH],
-            updated: false,
+    impl Default for Display {
+        fn default() -> Display {
+            Display {
+                data: [[false; SCREEN_HEIGHT]; SCREEN_WIDTH],
+                updated: false,
+            }
         }
     }
 }
+
 pub struct Chip8<'a> {
     memory: [u8; MEM_SIZE],
     display: Display, // TODO: Maybe make a struct with api since it is a 2dim array actually
@@ -52,10 +68,6 @@ pub struct Chip8<'a> {
     keypads: u16, // TODO: use bitflags
     registers: [u8; 0x10],
     ui: &'a mut (dyn UI + 'a),
-}
-
-pub trait UI {
-    fn update(&mut self, display: &Display);
 }
 
 impl<'a> Chip8<'a> {
@@ -169,18 +181,27 @@ pub fn run_file<'a>(emulator: &'a mut Chip8, file: &'a std::path::Path) -> Resul
     loop {
         let start_iter = Instant::now();
 
-        file_content.read_exact(&mut rdr).unwrap();
-        let opcode: u16 = rdr[0] as u16 | ((rdr[1] as u16) << 8);
-        let inst = Instruction::from(opcode);
+        let inst = read_instraction(&mut file_content, &mut rdr)?;
 
         emulator.pc += rdr.len() as u16;
         emulator.execute_instruction(inst)?;
 
-        if emulator.display.updated {
-            emulator.ui.update(&emulator.display);
-            emulator.display.updated = false;
+        if emulator.display.updated() {
+            emulator.ui.update(&emulator.display.data());
+            emulator.display.reset_updated();
         }
         // Delay iteration of the loop, use 500HZ or https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
         thread::sleep(Duration::from_millis(2) - start_iter.elapsed());
     }
+}
+
+fn read_instraction(
+    file_content: &mut BufReader<File>,
+    rdr: &mut [u8; 2],
+) -> Result<Instruction, &'static str> {
+    file_content
+        .read_exact(rdr)
+        .map_err(|_| "Failed while reading the file")?;
+    let opcode: u16 = rdr[0] as u16 | ((rdr[1] as u16) << 8);
+    Ok(Instruction::from(opcode))
 }
