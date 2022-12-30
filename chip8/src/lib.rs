@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -13,24 +14,55 @@ mod instruction;
 use instruction::Instruction;
 mod stack;
 
-pub struct Chip8 {
-    pub(crate) memory: [u8; MEM_SIZE],
-    pub(crate) display: [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH], // TODO: Maybe make a struct with api since it is a 2dim array actually
-    pub(crate) need_redraw: bool,
-    pub(crate) pc: u16,
-    pub(crate) ip: u16,
-    pub(crate) stack: stack::Stack,
-    pub(crate) delay_timer: u8, // TODO: Maybe atomic? need to decrement it in another thread
-    pub(crate) sound_timer: u8,
-    pub(crate) keypads: u16, // TODO: use bitflags
-    pub(crate) registers: [u8; 0x10],
+pub struct Display {
+    data: [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH],
+    updated: bool,
 }
 
-impl Default for Chip8 {
-    fn default() -> Self {
+impl Display {
+    fn mut_data_to_update(&mut self) -> &mut [[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
+        self.updated = true;
+        &mut self.data
+    }
+
+    fn data(&self) -> &[[bool; SCREEN_HEIGHT]; SCREEN_WIDTH] {
+        &self.data
+    }
+
+    fn reset_update(&mut self) {
+        self.updated = false;
+    }
+
+    fn default() -> Display {
+        Display {
+            data: [[false; SCREEN_HEIGHT]; SCREEN_WIDTH],
+            updated: false,
+        }
+    }
+}
+pub struct Chip8<'a> {
+    memory: [u8; MEM_SIZE],
+    display: Display, // TODO: Maybe make a struct with api since it is a 2dim array actually
+    need_redraw: bool,
+    pc: u16,
+    ip: u16,
+    stack: stack::Stack,
+    delay_timer: u8, // TODO: Maybe atomic? need to decrement it in another thread
+    sound_timer: u8,
+    keypads: u16, // TODO: use bitflags
+    registers: [u8; 0x10],
+    ui: &'a mut (dyn UI + 'a),
+}
+
+pub trait UI {
+    fn update(&mut self, display: &Display);
+}
+
+impl<'a> Chip8<'a> {
+    pub fn new(ui: &'a mut dyn UI) -> Self {
         Self {
             memory: [0; MEM_SIZE],
-            display: [[false; SCREEN_HEIGHT]; SCREEN_WIDTH],
+            display: Display::default(),
             need_redraw: false,
             pc: Default::default(),
             ip: Default::default(),
@@ -39,22 +71,23 @@ impl Default for Chip8 {
             sound_timer: Default::default(),
             keypads: Default::default(),
             registers: Default::default(),
+            ui,
         }
     }
 }
 
-impl Chip8 {
+impl Chip8<'_> {
     fn execute_instruction(&mut self, instruction: Instruction) -> Result<(), &'static str> {
         self.need_redraw = false;
         // TODO: guard from invalid jump out of mem or getting incapable register, replace with array.get_mut
         match instruction {
             Instruction::CLS => {
-                self.display = [[false; SCREEN_HEIGHT]; SCREEN_WIDTH];
+                *self.display.mut_data_to_update() = [[false; SCREEN_HEIGHT]; SCREEN_WIDTH];
                 self.need_redraw = true;
             }
             Instruction::RET => {
                 self.pc = self.stack.top().unwrap();
-                self.stack.pop()?;
+                self.stack.pop().ok_or("Can't return, the stack is empty")?;
             }
             Instruction::SysJump(_) => unreachable!(),
             Instruction::JP(addr) => {
@@ -72,7 +105,8 @@ impl Chip8 {
             Instruction::SKNP(_) => todo!(),
             Instruction::SKP(_) => todo!(),
             Instruction::DRW(regx, regy, n) => {
-                // TODO: enforce n should be less than 15 (max sprite size)
+                // Makes sure n is smaller than 15, the sprite max size
+                let n = n & 15;
                 let sprite = &self.memory[(self.ip as usize..(self.ip + n as u16) as usize)];
                 let vx = self.registers[regx as usize];
                 let vy = self.registers[regy as usize];
@@ -83,10 +117,10 @@ impl Chip8 {
                         let new_pixel = (p & (0b1 >> (8 - x))) != 0;
 
                         // If the xor going to erase the pixel (1^1), turn on the VF
-                        if new_pixel & self.display[r][c] {
+                        if new_pixel & self.display.data()[r][c] {
                             self.registers[0xF] = 1;
                         }
-                        self.display[r][c] ^= new_pixel;
+                        self.display.mut_data_to_update()[r][c] ^= new_pixel;
                     }
                     self.need_redraw = true;
                 }
@@ -127,10 +161,8 @@ impl Chip8 {
 }
 
 // TODO: replace with frame iterators? how to handle input
-fn start(file_name: &std::path::Path) {
-    let mut emulator: Chip8 = Default::default();
-
-    let mut file_content = BufReader::new(File::open(file_name).unwrap());
+pub fn run_file<'a>(emulator: &'a mut Chip8, file: &'a std::path::Path) -> Result<(), &'a str> {
+    let mut file_content = BufReader::new(File::open(file).unwrap());
     // TODO: start timers (delay and sound) - wrap chip in arc or check how much time passed since update
     // parse file?
     let mut rdr = [0u8; 2];
@@ -142,8 +174,12 @@ fn start(file_name: &std::path::Path) {
         let inst = Instruction::from(opcode);
 
         emulator.pc += rdr.len() as u16;
-        emulator.execute_instruction(inst);
+        emulator.execute_instruction(inst)?;
 
+        if emulator.display.updated {
+            emulator.ui.update(&emulator.display);
+            emulator.display.updated = false;
+        }
         // Delay iteration of the loop, use 500HZ or https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
         thread::sleep(Duration::from_millis(2) - start_iter.elapsed());
     }

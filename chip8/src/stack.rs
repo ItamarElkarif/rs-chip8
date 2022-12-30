@@ -17,12 +17,12 @@ impl Stack {
         Ok(())
     }
 
-    pub fn pop(&mut self) -> Result<u16, &'static str> {
+    pub fn pop(&mut self) -> Option<u16> {
         match self.sp {
-            0 => Err("Empty Stack"),
+            0 => None,
             _ => {
                 self.sp -= 1;
-                Ok(self.storage[self.sp])
+                Some(self.storage[self.sp])
             }
         }
     }
