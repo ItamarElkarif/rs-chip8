@@ -1,14 +1,10 @@
 #![allow(dead_code)]
 use crate::display::{Display, SCREEN_HEIGHT, SCREEN_WIDTH};
 pub use display::{DisplayData, UI};
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    thread,
-    time::{Duration, Instant},
-};
+use std::{error::Error, fs::File, io::Read};
 
 pub const MEM_SIZE: usize = 4 * 1024;
+pub const ROM_START: usize = 0x200;
 
 mod instruction;
 use instruction::Instruction;
@@ -59,7 +55,6 @@ mod display {
 pub struct Chip8<'a> {
     memory: [u8; MEM_SIZE],
     display: Display, // TODO: Maybe make a struct with api since it is a 2dim array actually
-    need_redraw: bool,
     pc: u16,
     ip: u16,
     stack: stack::Stack,
@@ -75,8 +70,7 @@ impl<'a> Chip8<'a> {
         Self {
             memory: [0; MEM_SIZE],
             display: Display::default(),
-            need_redraw: false,
-            pc: Default::default(),
+            pc: ROM_START as u16,
             ip: Default::default(),
             stack: Default::default(),
             delay_timer: Default::default(),
@@ -89,17 +83,16 @@ impl<'a> Chip8<'a> {
 }
 
 impl Chip8<'_> {
-    fn execute_instruction(&mut self, instruction: Instruction) -> Result<(), &'static str> {
-        self.need_redraw = false;
+    fn execute_instruction(&mut self, instruction: Instruction) -> Result<(), Box<dyn Error>> {
         // TODO: guard from invalid jump out of mem or getting incapable register, replace with array.get_mut
+        dbg!(&instruction);
+        dbg!(self.pc);
         match instruction {
             Instruction::CLS => {
                 *self.display.mut_data_to_update() = [[false; SCREEN_HEIGHT]; SCREEN_WIDTH];
-                self.need_redraw = true;
             }
             Instruction::RET => {
-                self.pc = self.stack.top().unwrap();
-                self.stack.pop().ok_or("Can't return, the stack is empty")?;
+                self.pc = self.stack.pop().ok_or("Can't return, the stack is empty")?;
             }
             Instruction::SysJump(_) => unreachable!(),
             Instruction::JP(addr) => {
@@ -116,17 +109,15 @@ impl Chip8<'_> {
             Instruction::LDGetDT(_) => todo!(),
             Instruction::SKNP(_) => todo!(),
             Instruction::SKP(_) => todo!(),
-            Instruction::DRW(regx, regy, n) => {
-                // Makes sure n is smaller than 15, the sprite max size
+            Instruction::DRW(vx, vy, n) => {
+                // TODO: Fix function, doesn't seems to work
                 let n = n & 15;
                 let sprite = &self.memory[(self.ip as usize..(self.ip + n as u16) as usize)];
-                let vx = self.registers[regx as usize];
-                let vy = self.registers[regy as usize];
                 for (y, p) in sprite.iter().enumerate() {
                     let c = vy as usize + y % SCREEN_HEIGHT;
                     for x in 0..8 {
                         let r = (vx + x) as usize % SCREEN_WIDTH;
-                        let new_pixel = (p & (0b1 >> (8 - x))) != 0;
+                        let new_pixel = (p & (0b1 >> (7 - x))) != 0;
 
                         // If the xor going to erase the pixel (1^1), turn on the VF
                         if new_pixel & self.display.data()[r][c] {
@@ -134,7 +125,6 @@ impl Chip8<'_> {
                         }
                         self.display.mut_data_to_update()[r][c] ^= new_pixel;
                     }
-                    self.need_redraw = true;
                 }
             }
             Instruction::RND(_, _) => todo!(),
@@ -150,6 +140,7 @@ impl Chip8<'_> {
             Instruction::AND(_, _) => todo!(),
             Instruction::OR(_, _) => todo!(),
             Instruction::LDSetNibbles(_, _) => todo!(),
+            // TODO: SHould check for overflow etc... low level stuff in all instructions
             Instruction::ADD(reg, val) => {
                 self.registers[reg as usize] += val;
             }
@@ -173,35 +164,40 @@ impl Chip8<'_> {
 }
 
 // TODO: replace with frame iterators? how to handle input
-pub fn run_file<'a>(emulator: &'a mut Chip8, file: &'a std::path::Path) -> Result<(), &'a str> {
-    let mut file_content = BufReader::new(File::open(file).unwrap());
+pub fn run_file<'a>(
+    emulator: &'a mut Chip8,
+    file: &'a std::path::Path,
+) -> Result<(), Box<dyn Error>> {
+    load_rom(file, emulator)?;
     // TODO: start timers (delay and sound) - wrap chip in arc or check how much time passed since update
-    // parse file?
-    let mut rdr = [0u8; 2];
-    loop {
-        let start_iter = Instant::now();
-
-        let inst = read_instraction(&mut file_content, &mut rdr)?;
-
-        emulator.pc += rdr.len() as u16;
+    while emulator.pc < emulator.memory.len() as u16 {
+        let inst = read_instraction(emulator)?;
+        // dbg!((emulator.pc, &inst));
         emulator.execute_instruction(inst)?;
 
         if emulator.display.updated() {
             emulator.ui.update(&emulator.display.data());
             emulator.display.reset_updated();
         }
-        // Delay iteration of the loop, use 500HZ or https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
-        thread::sleep(Duration::from_millis(2) - start_iter.elapsed());
     }
+    Ok(())
 }
 
-fn read_instraction(
-    file_content: &mut BufReader<File>,
-    rdr: &mut [u8; 2],
-) -> Result<Instruction, &'static str> {
-    file_content
-        .read_exact(rdr)
-        .map_err(|_| "Failed while reading the file")?;
-    let opcode: u16 = rdr[0] as u16 | ((rdr[1] as u16) << 8);
-    Ok(Instruction::from(opcode))
+fn load_rom(file: &std::path::Path, emulator: &mut Chip8) -> Result<(), Box<dyn Error>> {
+    let mut rom = Vec::with_capacity(MEM_SIZE);
+    let len = File::open(file)?.read_to_end(&mut rom)?;
+    if emulator.memory.len() < ROM_START + len {
+        return Err("The rom is too big!".into());
+    }
+    emulator.memory[ROM_START..ROM_START + len].copy_from_slice(&rom);
+    Ok(())
+}
+
+fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
+    // TODO: consider making the mem just u16 since I split it in the try_from_opcode, might ruin
+    // sprites
+    let opcode: u16 = emulator.memory[emulator.pc as usize + 1] as u16
+        | ((emulator.memory[emulator.pc as usize] as u16) << 8);
+    emulator.pc += 2;
+    Instruction::try_from(opcode)
 }
