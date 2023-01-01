@@ -1,4 +1,7 @@
+use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use std::error::Error;
+
+use crate::Chip8;
 
 // TODO: read how to decode with http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 #[allow(clippy::upper_case_acronyms)]
@@ -109,7 +112,7 @@ impl TryFrom<u16> for Instruction {
             0xC000 => Ok(Instruction::RND((opcode >> 8) as u8 & 0x0F, opcode as u8)),
             0xD000 => Ok(Instruction::DRW(
                 (opcode >> 8) as u8 & 0x0F,
-                opcode as u8 & 0xF0,
+                (opcode >> 4) as u8 & 0x0F,
                 opcode as u8 & 0x0F,
             )),
             0xE000 => match opcode & 0x00FF {
@@ -143,4 +146,101 @@ impl TryFrom<u16> for Instruction {
             // 0xF => Instruction::LD,
         }
     }
+}
+
+pub fn execute_instruction(
+    emulator: &mut Chip8,
+    instruction: Instruction,
+) -> Result<(), Box<dyn Error>> {
+    // TODO: guard from invalid jump out of mem or getting incapable register, replace with array.get_mut
+    match instruction {
+        Instruction::CLS => {
+            *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+        }
+        Instruction::RET => {
+            emulator.pc = emulator
+                .stack
+                .pop()
+                .ok_or("Can't return, the stack is empty")?;
+        }
+        Instruction::SysJump(_) => unreachable!(),
+        Instruction::JP(addr) => {
+            emulator.pc = addr;
+        }
+        Instruction::LDReadRegisters(v_count) => {
+            // TODO: Check if ip+vx is out of range (something like get but for slice)
+            let data =
+                &emulator.memory[emulator.i as usize..(emulator.i + v_count as u16) as usize];
+            for i in 0..v_count as usize {
+                emulator.registers[i] = data[i];
+            }
+        }
+
+        Instruction::LDStoreRegisters(_) => todo!(),
+        Instruction::LDStoreBCD(_) => todo!(),
+        Instruction::LDSetISprite(_) => todo!(),
+        Instruction::ADDI(_) => todo!(),
+        Instruction::LDSetST(_) => todo!(),
+        Instruction::LDSetDT(_) => todo!(),
+        Instruction::LDKeyPress(_) => todo!(),
+        Instruction::LDGetDT(_) => todo!(),
+        Instruction::SKNP(_) => todo!(),
+        Instruction::SKP(_) => todo!(),
+        Instruction::DRW(vx, vy, n) => {
+            let x_pos = emulator.registers[vx as usize];
+            let y_pos = emulator.registers[vy as usize];
+            let mut collision = 0;
+            // TODO: Fix function, doesn't seems to work
+            let n = n & 15;
+            let sprite = &emulator.memory[(emulator.i as usize..(emulator.i + n as u16) as usize)];
+            for (i, pixel) in sprite.iter().enumerate() {
+                let row = (y_pos as usize + i) % SCREEN_HEIGHT;
+                for bit in 0..8 {
+                    let col = (x_pos + bit) as usize % SCREEN_WIDTH;
+                    let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
+
+                    // If the xor going to erase the pixel (1^1), turn on the VF
+                    if new_pixel & emulator.display.data()[row * SCREEN_WIDTH + col] {
+                        collision = 1;
+                    }
+                    emulator.display.mut_data_to_update()[row * SCREEN_WIDTH + col] ^= new_pixel;
+                }
+            }
+            emulator.registers[0xF] = collision;
+        }
+        Instruction::RND(_, _) => todo!(),
+        Instruction::LDSetIAddr(addr) => emulator.i = addr,
+        Instruction::V0JP(addr) => {
+            emulator.pc = addr + emulator.registers[0] as u16;
+        }
+        Instruction::SHL(_, _) => todo!(),
+        Instruction::SUBN(_, _) => todo!(),
+        Instruction::SHR(_, _) => todo!(),
+        Instruction::SUB(_, _) => todo!(),
+        Instruction::XOR(_, _) => todo!(),
+        Instruction::AND(_, _) => todo!(),
+        Instruction::OR(_, _) => todo!(),
+        Instruction::LDSetNibbles(_, _) => todo!(),
+        // TODO: SHould check for overflow etc... low level stuff in all instructions
+        Instruction::ADD(reg, val) => {
+            emulator.registers[reg as usize] += val;
+        }
+        Instruction::LD(reg, val) => {
+            emulator.registers[reg as usize] = val;
+        }
+        Instruction::SENibble(_, _) => todo!(),
+        Instruction::SNE(_, _) => todo!(),
+        Instruction::SEByte(reg, val) => {
+            if emulator.registers[reg as usize] == val {
+                emulator.pc += 1;
+            }
+        }
+        Instruction::CALL(_addr) => {
+            // TODO: Store registers
+            // emulator.stack.push(emulator.pc)?;
+            // emulator.pc = addr;
+            todo!()
+        }
+    };
+    Ok(())
 }

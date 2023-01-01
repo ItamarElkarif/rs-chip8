@@ -39,7 +39,6 @@ impl Stack {
 mod tests {
     use super::Stack;
 
-    // The `test` attribute macro identifies functions that will run as tests
     #[test]
     fn test_fifo() {
         let mut s = Stack::default();
