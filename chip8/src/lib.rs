@@ -2,6 +2,7 @@
 use crate::display::Display;
 pub use crate::display::{SCREEN_HEIGHT, SCREEN_WIDTH};
 pub use display::{DisplayData, UI};
+use resources::SPRITE_ADDR;
 use stack::Stack;
 use std::error::Error;
 
@@ -9,6 +10,7 @@ pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
 
 mod instruction;
+mod resources;
 use instruction::{execute_instruction, Instruction};
 mod stack;
 
@@ -69,8 +71,11 @@ pub struct Chip8<'a> {
 
 impl<'a> Chip8<'a> {
     pub fn new(ui: &'a mut dyn UI) -> Self {
+        let mut mem = [0; MEM_SIZE];
+        mem[0..0x10 * 5].copy_from_slice(&SPRITE_ADDR);
+
         Self {
-            memory: [0; MEM_SIZE],
+            memory: mem,
             display: Display::default(),
             pc: ROM_START as u16,
             i: Default::default(),
@@ -115,33 +120,4 @@ fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>>
         | ((emulator.memory[emulator.pc as usize] as u16) << 8);
     emulator.pc += 2;
     Instruction::try_from(opcode)
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::instruction::execute_instruction;
-
-    use super::*;
-
-    struct MockUI;
-    impl UI for MockUI {
-        fn update(&mut self, _: &DisplayData) {}
-    }
-
-    #[test]
-    fn test_drw() {
-        let mut binding = MockUI;
-        let mut chip = Chip8::new(&mut binding);
-        chip.registers[0] = 2;
-        chip.registers[1] = 3;
-        chip.i = ROM_START as _;
-        chip.memory[ROM_START..ROM_START + 4].copy_from_slice(&[255, 0, 255, 255]);
-        execute_instruction(&mut chip, Instruction::DRW(0, 1, 4)).unwrap();
-        for row in &[3, 5, 6] {
-            assert_eq!(
-                chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
-                [true, true, true, true, true, true, true, true]
-            );
-        }
-    }
 }

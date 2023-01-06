@@ -1,4 +1,3 @@
-mod resources;
 use chip8::{Chip8, MEM_SIZE};
 use std::fs::File;
 use std::io::Read;

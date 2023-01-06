@@ -33,13 +33,15 @@ pub enum Instruction {
     XOR(u8, u8),
     AND(u8, u8),
     OR(u8, u8),
-    LDSetNibbles(u8, u8),
+    LDREGS(u8, u8),
     ADD(u8, u8),
     LD(u8, u8),
     SENibble(u8, u8),
     SNE(u8, u8),
     SEByte(u8, u8),
     CALL(u16),
+    ADDCARRIED(u8, u8),
+    SNEREG(u8, u8),
 }
 
 impl TryFrom<u16> for Instruction {
@@ -60,52 +62,52 @@ impl TryFrom<u16> for Instruction {
             0x4000 => Ok(Instruction::SNE((opcode >> 8) as u8 & 0x0F, opcode as u8)),
             0x5000 => Ok(Instruction::SENibble(
                 (opcode >> 8) as u8 & 0x0F,
-                opcode as u8 & 0xF0,
+                opcode as u8 >> 4,
             )),
             0x6000 => Ok(Instruction::LD((opcode >> 8) as u8 & 0x0F, opcode as u8)),
             0x7000 => Ok(Instruction::ADD((opcode >> 8) as u8 & 0x0F, opcode as u8)),
             0x8000 => match opcode & 0xF {
-                0x0 => Ok(Instruction::LDSetNibbles(
+                0x0 => Ok(Instruction::LDREGS(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x1 => Ok(Instruction::OR(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x2 => Ok(Instruction::AND(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x3 => Ok(Instruction::XOR(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
-                0x4 => Ok(Instruction::ADD(
+                0x4 => Ok(Instruction::ADDCARRIED(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x5 => Ok(Instruction::SUB(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x6 => Ok(Instruction::SHR(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0x7 => Ok(Instruction::SUBN(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 0xE => Ok(Instruction::SHL(
                     (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 & 0xF0,
+                    opcode as u8 >> 4,
                 )),
                 _ => Err(format!("Invalid Instruction Inside 0x8 {:X}", opcode).into()),
             },
-            0x9000 => Ok(Instruction::SNE(
+            0x9000 => Ok(Instruction::SNEREG(
                 (opcode >> 8) as u8 & 0x0F,
-                opcode as u8 & 0xF0,
+                opcode as u8 >> 4,
             )),
             0xA000 => Ok(Instruction::LDSetIAddr(opcode & 0xFFF)),
             0xB000 => Ok(Instruction::V0JP(opcode & 0xFFF)),
@@ -117,7 +119,7 @@ impl TryFrom<u16> for Instruction {
             )),
             0xE000 => match opcode & 0x00FF {
                 0x9E => Ok(Instruction::SKP((opcode >> 8) as u8 & 0x0F)),
-                0xA1E => Ok(Instruction::SKNP((opcode >> 8) as u8 & 0x0F)),
+                0xA1 => Ok(Instruction::SKNP((opcode >> 8) as u8 & 0x0F)),
                 _ => Err(format!("Invalid Instruction Inside E {:X}", opcode).into()),
             },
             0xF000 => match opcode & 0x00FF {
@@ -168,70 +170,86 @@ pub fn execute_instruction(
             emulator.pc = addr;
         }
         Instruction::LDReadRegisters(v_count) => {
-            // TODO: Check if ip+vx is out of range (something like get but for slice)
-            let data =
-                &emulator.memory[emulator.i as usize..(emulator.i + v_count as u16) as usize];
-            for i in 0..v_count as usize {
-                emulator.registers[i] = data[i];
-            }
+            let init = emulator.i as usize;
+            let data = &emulator.memory[init..init + v_count as usize];
+            emulator.registers[..v_count as usize].copy_from_slice(data);
         }
-
-        Instruction::LDStoreRegisters(_) => todo!(),
-        Instruction::LDStoreBCD(_) => todo!(),
-        Instruction::LDSetISprite(_) => todo!(),
-        Instruction::ADDI(_) => todo!(),
-        Instruction::LDSetST(_) => todo!(),
-        Instruction::LDSetDT(_) => todo!(),
-        Instruction::LDKeyPress(_) => todo!(),
-        Instruction::LDGetDT(_) => todo!(),
-        Instruction::SKNP(_) => todo!(),
-        Instruction::SKP(_) => todo!(),
+        Instruction::LDStoreRegisters(v_count) => {
+            let init = emulator.i as usize;
+            let data = &mut emulator.memory[init..init + v_count as usize];
+            data.copy_from_slice(&emulator.registers[..v_count as usize]);
+        }
+        Instruction::LDStoreBCD(vx) => {
+            // TODO: Test, not sure if works
+            let bcd = emulator.registers[vx as usize];
+            emulator.memory[emulator.i as usize] = bcd / 100;
+            emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
+            emulator.memory[emulator.i as usize + 2] = bcd % 10;
+        }
+        Instruction::LDSetISprite(vx) => emulator.i = vx as u16 * 5,
+        Instruction::ADDI(vx) => emulator.i += emulator.registers[vx as usize] as u16,
+        Instruction::LDSetST(vx) => emulator.sound_timer = emulator.registers[vx as usize],
+        Instruction::LDSetDT(vx) => emulator.delay_timer = emulator.registers[vx as usize],
+        Instruction::LDKeyPress(vx) => emulator.registers[vx as usize] = todo!(), // GetKey
+        Instruction::LDGetDT(vx) => emulator.registers[vx as usize] = emulator.delay_timer,
+        Instruction::SKNP(_vx) => todo!(),
+        Instruction::SKP(_vx) => todo!(),
         Instruction::DRW(vx, vy, n) => {
-            let x_pos = emulator.registers[vx as usize];
-            let y_pos = emulator.registers[vy as usize];
-            let mut collision = 0;
-            // TODO: Fix function, doesn't seems to work
-            let n = n & 15;
-            let sprite = &emulator.memory[(emulator.i as usize..(emulator.i + n as u16) as usize)];
-            for (i, pixel) in sprite.iter().enumerate() {
-                let row = (y_pos as usize + i) % SCREEN_HEIGHT;
-                for bit in 0..8 {
-                    let col = (x_pos + bit) as usize % SCREEN_WIDTH;
-                    let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
-
-                    // If the xor going to erase the pixel (1^1), turn on the VF
-                    if new_pixel & emulator.display.data()[row * SCREEN_WIDTH + col] {
-                        collision = 1;
-                    }
-                    emulator.display.mut_data_to_update()[row * SCREEN_WIDTH + col] ^= new_pixel;
-                }
-            }
-            emulator.registers[0xF] = collision;
+            drw(emulator, vx, vy, n);
         }
-        Instruction::RND(_, _) => todo!(),
+        Instruction::RND(vx, max) => emulator.registers[vx as usize] = rand::random::<u8>() & max,
         Instruction::LDSetIAddr(addr) => emulator.i = addr,
         Instruction::V0JP(addr) => {
             emulator.pc = addr + emulator.registers[0] as u16;
         }
-        Instruction::SHL(_, _) => todo!(),
-        Instruction::SUBN(_, _) => todo!(),
-        Instruction::SHR(_, _) => todo!(),
-        Instruction::SUB(_, _) => todo!(),
-        Instruction::XOR(_, _) => todo!(),
-        Instruction::AND(_, _) => todo!(),
-        Instruction::OR(_, _) => todo!(),
-        Instruction::LDSetNibbles(_, _) => todo!(),
-        // TODO: SHould check for overflow etc... low level stuff in all instructions
-        Instruction::ADD(reg, val) => {
-            emulator.registers[reg as usize] += val;
+        Instruction::SHL(vx, _) => {
+            emulator.registers[0xF] = (emulator.registers[vx as usize] & 0b1000000 != 0) as u8;
+            emulator.registers[vx as usize] <<= 1;
         }
-        Instruction::LD(reg, val) => {
-            emulator.registers[reg as usize] = val;
+        Instruction::SUBN(vx, vy) => {
+            let x = emulator.registers[vx as usize];
+            let y = emulator.registers[vy as usize];
+            emulator.registers[0xF] = (y > x) as u8;
+            emulator.registers[vx as usize] = y - x;
+        }
+        Instruction::SHR(vx, _) => {
+            emulator.registers[0xF] = vx & 0b1;
+            emulator.registers[vx as usize] >>= 1;
+        }
+        Instruction::SUB(vx, vy) => {
+            let x = emulator.registers[vx as usize];
+            let y = emulator.registers[vy as usize];
+            emulator.registers[0xF] = (x > y) as u8;
+            emulator.registers[vx as usize] -= y;
+        }
+        Instruction::XOR(vx, vy) => {
+            emulator.registers[vx as usize] ^= emulator.registers[vy as usize];
+        }
+        Instruction::AND(vx, vy) => {
+            emulator.registers[vx as usize] &= emulator.registers[vy as usize];
+        }
+        Instruction::OR(vx, vy) => {
+            emulator.registers[vx as usize] |= emulator.registers[vy as usize];
+        }
+        Instruction::LD(vx, val) => emulator.registers[vx as usize] = val,
+        // TODO: SHould check for overflow etc... low level stuff in all instructions
+        Instruction::ADD(vx, val) => {
+            emulator.registers[vx as usize] += val;
+        }
+        Instruction::ADDCARRIED(vx, vy) => {
+            emulator.registers[vx as usize] += emulator.registers[vy as usize];
+        }
+        Instruction::LDREGS(vx, vy) => {
+            emulator.registers[vx as usize] = emulator.registers[vy as usize];
         }
         Instruction::SENibble(_, _) => todo!(),
-        Instruction::SNE(_, _) => todo!(),
-        Instruction::SEByte(reg, val) => {
-            if emulator.registers[reg as usize] == val {
+        Instruction::SNE(vx, val) => {
+            if emulator.registers[vx as usize] != val {
+                emulator.pc += 2
+            }
+        }
+        Instruction::SEByte(vx, val) => {
+            if emulator.registers[vx as usize] == val {
                 emulator.pc += 1;
             }
         }
@@ -241,6 +259,74 @@ pub fn execute_instruction(
             // emulator.pc = addr;
             todo!()
         }
+        Instruction::SNEREG(vx, vy) => {
+            if emulator.registers[vx as usize] != emulator.registers[vy as usize] {
+                emulator.pc += 1;
+            }
+        }
     };
     Ok(())
+}
+
+fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) {
+    let x_pos = emulator.registers[vx as usize];
+    let y_pos = emulator.registers[vy as usize];
+    let mut collision = 0;
+    // TODO: Fix function, doesn't seems to work
+    let n = n & 15;
+    let sprite = &emulator.memory[(emulator.i as usize..(emulator.i + n as u16) as usize)];
+    for (i, pixel) in sprite.iter().enumerate() {
+        let row = (y_pos as usize + i) % SCREEN_HEIGHT;
+        for bit in 0..8 {
+            let col = (x_pos + bit) as usize % SCREEN_WIDTH;
+            let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
+
+            // If the xor going to erase the pixel (1^1), turn on the VF
+            if new_pixel & emulator.display.data()[row * SCREEN_WIDTH + col] {
+                collision = 1;
+            }
+            emulator.display.mut_data_to_update()[row * SCREEN_WIDTH + col] ^= new_pixel;
+        }
+    }
+    emulator.registers[0xF] = collision;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::*;
+
+    struct MockUI;
+    impl UI for MockUI {
+        fn update(&mut self, _: &DisplayData) {}
+    }
+
+    #[test]
+    fn test_drw() {
+        let mut binding = MockUI;
+        let mut chip = Chip8::new(&mut binding);
+        chip.registers[0] = 2;
+        chip.registers[1] = 3;
+        chip.i = ROM_START as _;
+        chip.memory[ROM_START..ROM_START + 4].copy_from_slice(&[255, 0, 255, 255]);
+        execute_instruction(&mut chip, Instruction::DRW(0, 1, 4)).unwrap();
+        for row in &[3, 5, 6] {
+            assert_eq!(
+                chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
+                [true, true, true, true, true, true, true, true]
+            );
+        }
+    }
+
+    #[test]
+    fn test_set_i_sprite() {
+        let mut binding = MockUI;
+        let mut chip = Chip8::new(&mut binding);
+        execute_instruction(&mut chip, Instruction::LDSetISprite(3)).unwrap();
+        assert_eq!(chip.i, 5 * 3);
+        assert_eq!(
+            &chip.memory[chip.i as usize..chip.i as usize + 5],
+            &[0xF0, 0x10, 0xF0, 0x10, 0xF0]
+        );
+    }
 }
