@@ -36,7 +36,7 @@ pub enum Instruction {
     LDREGS(u8, u8),
     ADD(u8, u8),
     LD(u8, u8),
-    SENibble(u8, u8),
+    SEREG(u8, u8),
     SNE(u8, u8),
     SEByte(u8, u8),
     CALL(u16),
@@ -46,6 +46,7 @@ pub enum Instruction {
 
 impl TryFrom<u16> for Instruction {
     type Error = Box<dyn Error>;
+    // TODO: replace opcode with 2 u8 since it is how you get it! simpler to parse
     fn try_from(opcode: u16) -> Result<Self, Box<dyn Error>> {
         match opcode & 0xF000 {
             0x0000 => match opcode {
@@ -60,7 +61,7 @@ impl TryFrom<u16> for Instruction {
                 opcode as u8,
             )),
             0x4000 => Ok(Instruction::SNE((opcode >> 8) as u8 & 0x0F, opcode as u8)),
-            0x5000 => Ok(Instruction::SENibble(
+            0x5000 => Ok(Instruction::SEREG(
                 (opcode >> 8) as u8 & 0x0F,
                 opcode as u8 >> 4,
             )),
@@ -154,7 +155,7 @@ pub fn execute_instruction(
     emulator: &mut Chip8,
     instruction: Instruction,
 ) -> Result<(), Box<dyn Error>> {
-    // TODO: guard from invalid jump out of mem or getting incapable register, replace with array.get_mut
+    // TODO: replace registers with Reg(u8) being indexed
     match instruction {
         Instruction::CLS => {
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
@@ -163,7 +164,7 @@ pub fn execute_instruction(
             emulator.pc = emulator
                 .stack
                 .pop()
-                .ok_or("Can't return, the stack is empty")?;
+                .ok_or("Can't return root function, the stack is empty")?;
         }
         Instruction::SysJump(_) => unreachable!(),
         Instruction::JP(addr) => {
@@ -171,12 +172,18 @@ pub fn execute_instruction(
         }
         Instruction::LDReadRegisters(v_count) => {
             let init = emulator.i as usize;
-            let data = &emulator.memory[init..init + v_count as usize];
+            let data = &emulator
+                .memory
+                .get(init..init + v_count as usize)
+                .ok_or("I Pointer got out of bound")?;
             emulator.registers[..v_count as usize].copy_from_slice(data);
         }
         Instruction::LDStoreRegisters(v_count) => {
             let init = emulator.i as usize;
-            let data = &mut emulator.memory[init..init + v_count as usize];
+            let data = emulator
+                .memory
+                .get_mut(init..init + v_count as usize)
+                .ok_or("I Pointer got out of bound")?;
             data.copy_from_slice(&emulator.registers[..v_count as usize]);
         }
         Instruction::LDStoreBCD(vx) => {
@@ -195,7 +202,7 @@ pub fn execute_instruction(
         Instruction::SKNP(_vx) => todo!(),
         Instruction::SKP(_vx) => todo!(),
         Instruction::DRW(vx, vy, n) => {
-            drw(emulator, vx, vy, n);
+            drw(emulator, vx, vy, n)?;
         }
         Instruction::RND(vx, max) => emulator.registers[vx as usize] = rand::random::<u8>() & max,
         Instruction::LDSetIAddr(addr) => emulator.i = addr,
@@ -232,17 +239,23 @@ pub fn execute_instruction(
             emulator.registers[vx as usize] |= emulator.registers[vy as usize];
         }
         Instruction::LD(vx, val) => emulator.registers[vx as usize] = val,
-        // TODO: SHould check for overflow etc... low level stuff in all instructions
         Instruction::ADD(vx, val) => {
             emulator.registers[vx as usize] += val;
         }
         Instruction::ADDCARRIED(vx, vy) => {
-            emulator.registers[vx as usize] += emulator.registers[vy as usize];
+            let (res, overflow) =
+                emulator.registers[vx as usize].overflowing_add(emulator.registers[vy as usize]);
+            emulator.registers[vx as usize] = res;
+            emulator.registers[0xF] = overflow as u8;
         }
         Instruction::LDREGS(vx, vy) => {
             emulator.registers[vx as usize] = emulator.registers[vy as usize];
         }
-        Instruction::SENibble(_, _) => todo!(),
+        Instruction::SEREG(vx, val) => {
+            if emulator.registers[vx as usize] == val {
+                emulator.pc += 2
+            }
+        }
         Instruction::SNE(vx, val) => {
             if emulator.registers[vx as usize] != val {
                 emulator.pc += 2
@@ -253,11 +266,9 @@ pub fn execute_instruction(
                 emulator.pc += 1;
             }
         }
-        Instruction::CALL(_addr) => {
-            // TODO: Store registers
-            // emulator.stack.push(emulator.pc)?;
-            // emulator.pc = addr;
-            todo!()
+        Instruction::CALL(addr) => {
+            emulator.stack.push(emulator.pc)?;
+            emulator.pc = addr;
         }
         Instruction::SNEREG(vx, vy) => {
             if emulator.registers[vx as usize] != emulator.registers[vy as usize] {
@@ -268,13 +279,16 @@ pub fn execute_instruction(
     Ok(())
 }
 
-fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) {
+fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>> {
     let x_pos = emulator.registers[vx as usize];
     let y_pos = emulator.registers[vy as usize];
     let mut collision = 0;
     // TODO: Fix function, doesn't seems to work
     let n = n & 15;
-    let sprite = &emulator.memory[(emulator.i as usize..(emulator.i + n as u16) as usize)];
+    let sprite = emulator
+        .memory
+        .get(emulator.i as usize..(emulator.i + n as u16) as usize)
+        .ok_or("I pointer got out OnionGrief bound")?;
     for (i, pixel) in sprite.iter().enumerate() {
         let row = (y_pos as usize + i) % SCREEN_HEIGHT;
         for bit in 0..8 {
@@ -289,6 +303,7 @@ fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) {
         }
     }
     emulator.registers[0xF] = collision;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -299,6 +314,7 @@ mod tests {
     struct MockUI;
     impl UI for MockUI {
         fn update(&mut self, _: &DisplayData) {}
+        fn beep(&self) {}
     }
 
     #[test]

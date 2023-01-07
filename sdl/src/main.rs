@@ -17,6 +17,10 @@ impl chip8::UI for ConsoleUI {
             )
         }
     }
+
+    fn beep(&self) {
+        println!("BEEPED");
+    }
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let mut sdl = ConsoleUI;

@@ -4,7 +4,7 @@ pub use crate::display::{SCREEN_HEIGHT, SCREEN_WIDTH};
 pub use display::{DisplayData, UI};
 use resources::SPRITE_ADDR;
 use stack::Stack;
-use std::error::Error;
+use std::{cmp::max, error::Error, time::Instant};
 
 pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
@@ -20,6 +20,7 @@ mod display {
     pub type DisplayData = [bool; SCREEN_WIDTH * SCREEN_HEIGHT];
     pub trait UI {
         fn update(&mut self, display: &DisplayData);
+        fn beep(&self);
     }
 
     pub struct Display {
@@ -102,10 +103,21 @@ impl<'a> Chip8<'a> {
 // TODO: replace with frame iterators? how to handle input
 pub fn run_file<'a>(emulator: &'a mut Chip8, file: &[u8]) -> Result<(), Box<dyn Error>> {
     emulator.load_rom(file)?;
-    // TODO: start timers (delay and sound) - wrap chip in arc or check how much time passed since update
+    // TODO: start timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
     while emulator.pc < emulator.memory.len() as u16 {
+        let start_iter = Instant::now();
+
         let inst = read_instraction(emulator)?;
         execute_instruction(emulator, inst)?;
+
+        if emulator.delay_timer > 0 {
+            update_timer(&mut emulator.delay_timer, start_iter);
+        }
+
+        if emulator.sound_timer > 0 {
+            emulator.ui.beep();
+            update_timer(&mut emulator.sound_timer, start_iter);
+        }
 
         if emulator.display.updated() {
             emulator.ui.update(emulator.display.data());
@@ -113,6 +125,10 @@ pub fn run_file<'a>(emulator: &'a mut Chip8, file: &[u8]) -> Result<(), Box<dyn 
         }
     }
     Ok(())
+}
+
+fn update_timer(timer: &mut u8, start_iter: Instant) {
+    *timer -= max((Instant::now() - start_iter).as_millis() * 1000 / 60, 0) as u8;
 }
 
 fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
