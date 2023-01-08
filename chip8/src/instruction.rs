@@ -3,7 +3,6 @@ use std::error::Error;
 
 use crate::Chip8;
 
-// TODO: read how to decode with http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
 pub enum Instruction {
@@ -44,98 +43,76 @@ pub enum Instruction {
     SNEREG(u8, u8),
 }
 
-impl TryFrom<u16> for Instruction {
+macro_rules! Xnnn {
+    ($hi:expr, $lo:expr) => {
+        (($hi & 0xF) as u16) << 8 | $lo as u16
+    };
+}
+
+impl TryFrom<(u8, u8)> for Instruction {
     type Error = Box<dyn Error>;
     // TODO: replace opcode with 2 u8 since it is how you get it! simpler to parse
-    fn try_from(opcode: u16) -> Result<Self, Box<dyn Error>> {
-        match opcode & 0xF000 {
-            0x0000 => match opcode {
-                0x00E0 => Ok(Instruction::CLS),
-                0x00EE => Ok(Instruction::RET),
-                _ => Ok(Instruction::SysJump(opcode & 0xFFF)),
+    fn try_from(opcode: (u8, u8)) -> Result<Self, Box<dyn Error>> {
+        match opcode.0 & 0xF0 {
+            0x00 => match opcode.1 {
+                0xE0 => Ok(Instruction::CLS),
+                0xEE => Ok(Instruction::RET),
+                _ => Ok(Instruction::SysJump(Xnnn!(opcode.0, opcode.1))),
             },
-            0x1000 => Ok(Instruction::JP(opcode & 0xFFF)),
-            0x2000 => Ok(Instruction::CALL(opcode & 0xFFF)),
-            0x3000 => Ok(Instruction::SEByte(
-                (opcode >> 8) as u8 & 0x0F,
-                opcode as u8,
-            )),
-            0x4000 => Ok(Instruction::SNE((opcode >> 8) as u8 & 0x0F, opcode as u8)),
-            0x5000 => Ok(Instruction::SEREG(
-                (opcode >> 8) as u8 & 0x0F,
-                opcode as u8 >> 4,
-            )),
-            0x6000 => Ok(Instruction::LD((opcode >> 8) as u8 & 0x0F, opcode as u8)),
-            0x7000 => Ok(Instruction::ADD((opcode >> 8) as u8 & 0x0F, opcode as u8)),
-            0x8000 => match opcode & 0xF {
-                0x0 => Ok(Instruction::LDREGS(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x1 => Ok(Instruction::OR(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x2 => Ok(Instruction::AND(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x3 => Ok(Instruction::XOR(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x4 => Ok(Instruction::ADDCARRIED(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x5 => Ok(Instruction::SUB(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x6 => Ok(Instruction::SHR(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0x7 => Ok(Instruction::SUBN(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                0xE => Ok(Instruction::SHL(
-                    (opcode >> 8) as u8 & 0x0F,
-                    opcode as u8 >> 4,
-                )),
-                _ => Err(format!("Invalid Instruction Inside 0x8 {:X}", opcode).into()),
+            0x10 => Ok(Instruction::JP(Xnnn!(opcode.0, opcode.1))),
+            0x20 => Ok(Instruction::CALL(Xnnn!(opcode.0, opcode.1))),
+            0x30 => Ok(Instruction::SEByte(opcode.0 & 0x0F, opcode.1)),
+            0x40 => Ok(Instruction::SNE(opcode.0 & 0x0F, opcode.1)),
+            0x50 => Ok(Instruction::SEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
+            0x60 => Ok(Instruction::LD(opcode.0 & 0x0F, opcode.1)),
+            0x70 => Ok(Instruction::ADD(opcode.0 & 0x0F, opcode.1)),
+            0x80 => match opcode.1 & 0xF {
+                0x0 => Ok(Instruction::LDREGS(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x1 => Ok(Instruction::OR(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x2 => Ok(Instruction::AND(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x3 => Ok(Instruction::XOR(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x4 => Ok(Instruction::ADDCARRIED(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x5 => Ok(Instruction::SUB(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x6 => Ok(Instruction::SHR(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x7 => Ok(Instruction::SUBN(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0xE => Ok(Instruction::SHL(opcode.0 & 0x0F, opcode.1 >> 4)),
+                _ => Err(format!(
+                    "Invalid Instruction Inside 0x8 {:X}{:X}",
+                    opcode.0, opcode.1
+                )
+                .into()),
             },
-            0x9000 => Ok(Instruction::SNEREG(
-                (opcode >> 8) as u8 & 0x0F,
-                opcode as u8 >> 4,
+            0x90 => Ok(Instruction::SNEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
+            0xA0 => Ok(Instruction::LDSetIAddr(dbg!(Xnnn!(opcode.0, opcode.1)))),
+            0xB0 => Ok(Instruction::V0JP(Xnnn!(opcode.0, opcode.1))),
+            0xC0 => Ok(Instruction::RND(opcode.0 & 0x0F, opcode.1)),
+            0xD0 => Ok(Instruction::DRW(
+                opcode.0 & 0x0F,
+                (opcode.1 >> 4) & 0x0F,
+                opcode.1 & 0x0F,
             )),
-            0xA000 => Ok(Instruction::LDSetIAddr(opcode & 0xFFF)),
-            0xB000 => Ok(Instruction::V0JP(opcode & 0xFFF)),
-            0xC000 => Ok(Instruction::RND((opcode >> 8) as u8 & 0x0F, opcode as u8)),
-            0xD000 => Ok(Instruction::DRW(
-                (opcode >> 8) as u8 & 0x0F,
-                (opcode >> 4) as u8 & 0x0F,
-                opcode as u8 & 0x0F,
-            )),
-            0xE000 => match opcode & 0x00FF {
-                0x9E => Ok(Instruction::SKP((opcode >> 8) as u8 & 0x0F)),
-                0xA1 => Ok(Instruction::SKNP((opcode >> 8) as u8 & 0x0F)),
-                _ => Err(format!("Invalid Instruction Inside E {:X}", opcode).into()),
+            0xE0 => match opcode.1 {
+                0x9E => Ok(Instruction::SKP(opcode.0 & 0x0F)),
+                0xA1 => Ok(Instruction::SKNP(opcode.0 & 0x0F)),
+                _ => {
+                    Err(format!("Invalid Instruction Inside E {:X}{:X}", opcode.0, opcode.1).into())
+                }
             },
-            0xF000 => match opcode & 0x00FF {
-                0x7 => Ok(Instruction::LDGetDT((opcode >> 8) as u8 & 0xF)),
-                0xA => Ok(Instruction::LDKeyPress((opcode >> 8) as u8 & 0xF)),
-                0x15 => Ok(Instruction::LDSetDT((opcode >> 8) as u8 & 0xF)),
-                0x18 => Ok(Instruction::LDSetST((opcode >> 8) as u8 & 0xF)),
-                0x1E => Ok(Instruction::ADDI((opcode >> 8) as u8 & 0xF)),
-                0x29 => Ok(Instruction::LDSetISprite((opcode >> 8) as u8 & 0xF)),
-                0x33 => Ok(Instruction::LDStoreBCD((opcode >> 8) as u8 & 0xF)),
-                0x55 => Ok(Instruction::LDStoreRegisters((opcode >> 8) as u8 & 0xF)),
-                0x65 => Ok(Instruction::LDReadRegisters((opcode >> 8) as u8 & 0xF)),
-                _ => Err(format!("Invalid Instruction Inside F {:X}", opcode).into()),
+            0xF0 => match opcode.1 {
+                0x7 => Ok(Instruction::LDGetDT(opcode.0 & 0xF)),
+                0xA => Ok(Instruction::LDKeyPress(opcode.0 & 0xF)),
+                0x15 => Ok(Instruction::LDSetDT(opcode.0 & 0xF)),
+                0x18 => Ok(Instruction::LDSetST(opcode.0 & 0xF)),
+                0x1E => Ok(Instruction::ADDI(opcode.0 & 0xF)),
+                0x29 => Ok(Instruction::LDSetISprite(opcode.0 & 0xF)),
+                0x33 => Ok(Instruction::LDStoreBCD(opcode.0 & 0xF)),
+                0x55 => Ok(Instruction::LDStoreRegisters(opcode.0 & 0xF)),
+                0x65 => Ok(Instruction::LDReadRegisters(opcode.0 & 0xF)),
+                _ => {
+                    Err(format!("Invalid Instruction Inside F {:X}{:X}", opcode.0, opcode.1).into())
+                }
             },
-            _ => Err(format!("Invalid Instruction {:X}", opcode).into()),
+            _ => Err(format!("Invalid Instruction {:X}{:X}", opcode.0, opcode.1).into()),
             // TODO: add Super chip-48 Instructions
             // 0x0 => Instruction::SCD,
             // 0x0 => Instruction::SCR,
@@ -155,7 +132,7 @@ pub fn execute_instruction(
     emulator: &mut Chip8,
     instruction: Instruction,
 ) -> Result<(), Box<dyn Error>> {
-    // TODO: replace registers with Reg(u8) being indexed
+    // TODO: replace registers with Reg(u8) being indexed, problem with range of Regs
     match instruction {
         Instruction::CLS => {
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
@@ -283,12 +260,11 @@ fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>
     let x_pos = emulator.registers[vx as usize];
     let y_pos = emulator.registers[vy as usize];
     let mut collision = 0;
-    // TODO: Fix function, doesn't seems to work
     let n = n & 15;
     let sprite = emulator
         .memory
         .get(emulator.i as usize..(emulator.i + n as u16) as usize)
-        .ok_or("I pointer got out OnionGrief bound")?;
+        .ok_or("I pointer got out of bound")?;
     for (i, pixel) in sprite.iter().enumerate() {
         let row = (y_pos as usize + i) % SCREEN_HEIGHT;
         for bit in 0..8 {

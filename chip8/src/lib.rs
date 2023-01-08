@@ -132,8 +132,10 @@ fn update_timer(timer: &mut u8, start_iter: Instant) {
 }
 
 fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
-    let opcode: u16 = emulator.memory[emulator.pc as usize + 1] as u16
-        | ((emulator.memory[emulator.pc as usize] as u16) << 8);
+    let opcode: (u8, u8) = (
+        emulator.memory[emulator.pc as usize],
+        emulator.memory[emulator.pc as usize + 1],
+    );
     emulator.pc += 2;
     Instruction::try_from(opcode)
 }
