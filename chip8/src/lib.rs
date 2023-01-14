@@ -1,61 +1,19 @@
 #![allow(dead_code)]
-use crate::display::Display;
-pub use crate::display::{SCREEN_HEIGHT, SCREEN_WIDTH};
-pub use display::{DisplayData, UI};
-use resources::SPRITE_ADDR;
-use stack::Stack;
 use std::{cmp::max, error::Error, time::Instant};
 
 pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
 
+mod display;
 mod instruction;
 mod resources;
 use instruction::{execute_instruction, Instruction};
 mod stack;
 
-mod display {
-    pub const SCREEN_WIDTH: usize = 64;
-    pub const SCREEN_HEIGHT: usize = 32;
-    pub type DisplayData = [bool; SCREEN_WIDTH * SCREEN_HEIGHT];
-    pub trait UI {
-        fn update(&mut self, display: &DisplayData);
-        fn beep(&self);
-    }
-
-    pub struct Display {
-        data: DisplayData,
-        updated: bool,
-    }
-
-    impl Display {
-        pub fn mut_data_to_update(&mut self) -> &mut [bool; SCREEN_WIDTH * SCREEN_HEIGHT] {
-            self.updated = true;
-            &mut self.data
-        }
-
-        pub fn data(&self) -> &[bool; SCREEN_WIDTH * SCREEN_HEIGHT] {
-            &self.data
-        }
-
-        pub fn updated(&self) -> bool {
-            self.updated
-        }
-
-        pub fn reset_updated(&mut self) {
-            self.updated = false;
-        }
-    }
-
-    impl Default for Display {
-        fn default() -> Display {
-            Display {
-                data: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
-                updated: false,
-            }
-        }
-    }
-}
+use display::Display;
+pub use display::{DisplayData, SCREEN_HEIGHT, SCREEN_WIDTH, UI};
+use resources::SPRITE_ADDR;
+use stack::Stack;
 
 pub struct Chip8<'a> {
     memory: [u8; MEM_SIZE],

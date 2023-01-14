@@ -51,7 +51,6 @@ macro_rules! Xnnn {
 
 impl TryFrom<(u8, u8)> for Instruction {
     type Error = Box<dyn Error>;
-    // TODO: replace opcode with 2 u8 since it is how you get it! simpler to parse
     fn try_from(opcode: (u8, u8)) -> Result<Self, Box<dyn Error>> {
         match opcode.0 & 0xF0 {
             0x00 => match opcode.1 {
@@ -256,29 +255,33 @@ pub fn execute_instruction(
     Ok(())
 }
 
+// TODO: Think about something better than looping bits, yach
 fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>> {
     let x_pos = emulator.registers[vx as usize];
     let y_pos = emulator.registers[vy as usize];
-    let mut collision = 0;
+    let mut collision = false;
     let n = n & 15;
     let sprite = emulator
         .memory
         .get(emulator.i as usize..(emulator.i + n as u16) as usize)
         .ok_or("I pointer got out of bound")?;
+
     for (i, pixel) in sprite.iter().enumerate() {
         let row = (y_pos as usize + i) % SCREEN_HEIGHT;
         for bit in 0..8 {
+            // TODO: somehow make col 0..8 into a united slice
             let col = (x_pos + bit) as usize % SCREEN_WIDTH;
+            let location = row * SCREEN_WIDTH + col;
             let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
 
-            // If the xor going to erase the pixel (1^1), turn on the VF
-            if new_pixel & emulator.display.data()[row * SCREEN_WIDTH + col] {
-                collision = 1;
+            // If the xor going to erase the pixel (1^1), turn on the collision VF
+            if new_pixel & emulator.display.data()[location] {
+                collision = true;
             }
-            emulator.display.mut_data_to_update()[row * SCREEN_WIDTH + col] ^= new_pixel;
+            emulator.display.mut_data_to_update()[location] ^= new_pixel;
         }
     }
-    emulator.registers[0xF] = collision;
+    emulator.registers[0xF] = collision as u8;
     Ok(())
 }
 
