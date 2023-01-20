@@ -173,10 +173,31 @@ pub fn execute_instruction(
         Instruction::ADDI(vx) => emulator.i += emulator.registers[vx as usize] as u16,
         Instruction::LDSetST(vx) => emulator.sound_timer = emulator.registers[vx as usize],
         Instruction::LDSetDT(vx) => emulator.delay_timer = emulator.registers[vx as usize],
-        Instruction::LDKeyPress(vx) => emulator.registers[vx as usize] = todo!(), // GetKey
+        Instruction::LDKeyPress(vx) => {
+            let keypad = emulator.keypad;
+            if keypad == 0 {
+                emulator.pc -= 2;
+                return Ok(());
+            }
+
+            for i in 0..0x10 {
+                if (1 >> i & keypad) != 0 {
+                    emulator.registers[vx as usize] = i;
+                    break;
+                }
+            }
+        }
         Instruction::LDGetDT(vx) => emulator.registers[vx as usize] = emulator.delay_timer,
-        Instruction::SKNP(_vx) => todo!(),
-        Instruction::SKP(_vx) => todo!(),
+        Instruction::SKNP(vx) => {
+            if (1 >> emulator.registers[vx as usize] & emulator.keypad) == 0 {
+                emulator.pc += 2;
+            }
+        }
+        Instruction::SKP(vx) => {
+            if (1 >> emulator.registers[vx as usize] & emulator.keypad) != 0 {
+                emulator.pc += 2;
+            }
+        }
         Instruction::DRW(vx, vy, n) => {
             drw(emulator, vx, vy, n)?;
         }

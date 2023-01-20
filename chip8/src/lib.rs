@@ -7,7 +7,7 @@ use std::{
 
 pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
-pub const FRAME_DURATION: Duration = Duration::from_millis(17); //
+pub const FRAME_DURATION: Duration = Duration::from_millis(17);
 
 mod display;
 mod instruction;
@@ -28,7 +28,7 @@ pub struct Chip8 {
     stack: Stack,
     delay_timer: u8, // TODO: Maybe atomic? need to decrement it in another thread
     sound_timer: u8,
-    keypads: u16, // TODO: use bitflags
+    keypad: u16, // TODO: use bitflags
     registers: [u8; 0x10],
 }
 
@@ -54,9 +54,13 @@ impl Chip8 {
             stack: Default::default(),
             delay_timer: Default::default(),
             sound_timer: Default::default(),
-            keypads: Default::default(),
+            keypad: Default::default(),
             registers: Default::default(),
         })
+    }
+
+    pub fn set_keypad(&mut self, new: u16) {
+        self.keypad = new;
     }
 }
 
@@ -73,7 +77,7 @@ impl Chip8 {
         self.display.updated()
     }
 
-    // TODO: replace with frame iterators? how to handle input
+    // TODO: should return the display, and while dropped Frame reset the display
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
         // TODO: timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
         let start_iter = Instant::now();
