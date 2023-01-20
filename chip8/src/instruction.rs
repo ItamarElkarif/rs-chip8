@@ -82,7 +82,7 @@ impl TryFrom<(u8, u8)> for Instruction {
                 .into()),
             },
             0x90 => Ok(Instruction::SNEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
-            0xA0 => Ok(Instruction::LDSetIAddr(dbg!(Xnnn!(opcode.0, opcode.1)))),
+            0xA0 => Ok(Instruction::LDSetIAddr(Xnnn!(opcode.0, opcode.1))),
             0xB0 => Ok(Instruction::V0JP(Xnnn!(opcode.0, opcode.1))),
             0xC0 => Ok(Instruction::RND(opcode.0 & 0x0F, opcode.1)),
             0xD0 => Ok(Instruction::DRW(
@@ -298,8 +298,7 @@ mod tests {
 
     #[test]
     fn test_drw() {
-        let mut binding = MockUI;
-        let mut chip = Chip8::new(&mut binding);
+        let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
         chip.registers[0] = 2;
         chip.registers[1] = 3;
         chip.i = ROM_START as _;
@@ -315,8 +314,7 @@ mod tests {
 
     #[test]
     fn test_set_i_sprite() {
-        let mut binding = MockUI;
-        let mut chip = Chip8::new(&mut binding);
+        let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
         execute_instruction(&mut chip, Instruction::LDSetISprite(3)).unwrap();
         assert_eq!(chip.i, 5 * 3);
         assert_eq!(
