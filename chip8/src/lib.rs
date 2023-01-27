@@ -11,12 +11,14 @@ pub const FRAME_DURATION: Duration = Duration::from_millis(17);
 
 mod display;
 mod instruction;
+mod registers;
 mod resources;
-use instruction::{execute_instruction, Instruction};
 mod stack;
 
 use display::Display;
 pub use display::{DisplayData, SCREEN_HEIGHT, SCREEN_WIDTH, UI};
+use instruction::{execute_instruction, Instruction};
+use registers::Regs;
 use resources::SPRITE_ADDR;
 use stack::Stack;
 
@@ -29,7 +31,7 @@ pub struct Chip8 {
     delay_timer: u8, // TODO: Maybe atomic? need to decrement it in another thread
     sound_timer: u8,
     keypad: u16, // TODO: use bitflags
-    registers: [u8; 0x10],
+    registers: Regs,
 }
 
 fn load_rom(mem: &mut [u8], input: &[u8]) -> Result<(), Box<dyn Error>> {

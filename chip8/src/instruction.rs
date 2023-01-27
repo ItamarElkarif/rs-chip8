@@ -1,4 +1,4 @@
-use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{registers::Reg, SCREEN_HEIGHT, SCREEN_WIDTH};
 use std::error::Error;
 
 use crate::Chip8;
@@ -13,34 +13,34 @@ pub enum Instruction {
     V0JP(u16),
     LDReadRegisters(u8),
     LDStoreRegisters(u8),
-    LDStoreBCD(u8),
+    LDStoreBCD(Reg),
     LDISPRITE(u8),
-    ADDI(u8),
-    LDSTREG(u8),
-    LDDTREG(u8),
-    LDREGKEY(u8),
-    LDREGDT(u8),
-    SKNP(u8),
-    SKP(u8),
-    DRW(u8, u8, u8),
-    RND(u8, u8),
+    ADDI(Reg),
+    LDSTREG(Reg),
+    LDDTREG(Reg),
+    LDREGKEY(Reg),
+    LDREGDT(Reg),
+    SKNP(Reg),
+    SKP(Reg),
+    DRW(Reg, Reg, u8),
+    RND(Reg, u8),
     LDIAddr(u16),
-    SHL(u8, u8),
-    SUBN(u8, u8),
-    SHR(u8, u8),
-    SUB(u8, u8),
-    XOR(u8, u8),
-    AND(u8, u8),
-    OR(u8, u8),
-    LDREGREG(u8, u8),
-    ADD(u8, u8),
-    LDREGByte(u8, u8),
-    SEREG(u8, u8),
-    SNE(u8, u8),
-    SEByte(u8, u8),
+    SHL(Reg, Reg),
+    SUBN(Reg, Reg),
+    SHR(Reg, Reg),
+    SUB(Reg, Reg),
+    XOR(Reg, Reg),
+    AND(Reg, Reg),
+    OR(Reg, Reg),
+    LDREGS(Reg, Reg),
+    ADD(Reg, u8),
+    LDREGByte(Reg, u8),
+    SEREGS(Reg, Reg),
+    SNE(Reg, u8),
+    SEByte(Reg, u8),
     CALL(u16),
-    ADDCARRIED(u8, u8),
-    SNEREG(u8, u8),
+    ADDCARRIED(Reg, Reg),
+    SNEREG(Reg, Reg),
 }
 
 macro_rules! Xnnn {
@@ -60,51 +60,63 @@ impl TryFrom<(u8, u8)> for Instruction {
             },
             0x10 => Ok(Instruction::JP(Xnnn!(opcode.0, opcode.1))),
             0x20 => Ok(Instruction::CALL(Xnnn!(opcode.0, opcode.1))),
-            0x30 => Ok(Instruction::SEByte(opcode.0 & 0x0F, opcode.1)),
-            0x40 => Ok(Instruction::SNE(opcode.0 & 0x0F, opcode.1)),
-            0x50 => Ok(Instruction::SEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
-            0x60 => Ok(Instruction::LDREGByte(opcode.0 & 0x0F, opcode.1)),
-            0x70 => Ok(Instruction::ADD(opcode.0 & 0x0F, opcode.1)),
+            0x30 => Ok(Instruction::SEByte(Reg(opcode.0 & 0x0F), opcode.1)),
+            0x40 => Ok(Instruction::SNE(Reg(opcode.0 & 0x0F), opcode.1)),
+            0x50 => Ok(Instruction::SEREGS(
+                Reg(opcode.0 & 0x0F),
+                Reg(opcode.1 >> 4),
+            )),
+            0x60 => Ok(Instruction::LDREGByte(Reg(opcode.0 & 0x0F), opcode.1)),
+            0x70 => Ok(Instruction::ADD(Reg(opcode.0 & 0x0F), opcode.1)),
             0x80 => match opcode.1 & 0xF {
-                0x0 => Ok(Instruction::LDREGREG(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x1 => Ok(Instruction::OR(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x2 => Ok(Instruction::AND(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x3 => Ok(Instruction::XOR(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x4 => Ok(Instruction::ADDCARRIED(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x5 => Ok(Instruction::SUB(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x6 => Ok(Instruction::SHR(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0x7 => Ok(Instruction::SUBN(opcode.0 & 0x0F, opcode.1 >> 4)),
-                0xE => Ok(Instruction::SHL(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x0 => Ok(Instruction::LDREGS(
+                    Reg(opcode.0 & 0x0F),
+                    Reg(opcode.1 >> 4),
+                )),
+                0x1 => Ok(Instruction::OR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x2 => Ok(Instruction::AND(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x3 => Ok(Instruction::XOR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x4 => Ok(Instruction::ADDCARRIED(
+                    Reg(opcode.0 & 0x0F),
+                    Reg(opcode.1 >> 4),
+                )),
+                0x5 => Ok(Instruction::SUB(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x6 => Ok(Instruction::SHR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x7 => Ok(Instruction::SUBN(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0xE => Ok(Instruction::SHL(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
                 _ => Err(format!(
                     "Invalid Instruction Inside 0x8 {:X}{:X}",
                     opcode.0, opcode.1
                 )
                 .into()),
             },
-            0x90 => Ok(Instruction::SNEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
+            0x90 => Ok(Instruction::SNEREG(
+                Reg(opcode.0 & 0x0F),
+                Reg(opcode.1 >> 4),
+            )),
             0xA0 => Ok(Instruction::LDIAddr(Xnnn!(opcode.0, opcode.1))),
             0xB0 => Ok(Instruction::V0JP(Xnnn!(opcode.0, opcode.1))),
-            0xC0 => Ok(Instruction::RND(opcode.0 & 0x0F, opcode.1)),
+            0xC0 => Ok(Instruction::RND(Reg(opcode.0 & 0x0F), opcode.1)),
             0xD0 => Ok(Instruction::DRW(
-                opcode.0 & 0x0F,
-                (opcode.1 >> 4) & 0x0F,
+                Reg(opcode.0 & 0x0F),
+                Reg((opcode.1 >> 4) & 0x0F),
                 opcode.1 & 0x0F,
             )),
             0xE0 => match opcode.1 {
-                0x9E => Ok(Instruction::SKP(opcode.0 & 0x0F)),
-                0xA1 => Ok(Instruction::SKNP(opcode.0 & 0x0F)),
+                0x9E => Ok(Instruction::SKP(Reg(opcode.0 & 0x0F))),
+                0xA1 => Ok(Instruction::SKNP(Reg(opcode.0 & 0x0F))),
                 _ => {
                     Err(format!("Invalid Instruction Inside E {:X}{:X}", opcode.0, opcode.1).into())
                 }
             },
             0xF0 => match opcode.1 {
-                0x7 => Ok(Instruction::LDREGDT(opcode.0 & 0xF)),
-                0xA => Ok(Instruction::LDREGKEY(opcode.0 & 0xF)),
-                0x15 => Ok(Instruction::LDDTREG(opcode.0 & 0xF)),
-                0x18 => Ok(Instruction::LDSTREG(opcode.0 & 0xF)),
-                0x1E => Ok(Instruction::ADDI(opcode.0 & 0xF)),
+                0x7 => Ok(Instruction::LDREGDT(Reg(opcode.0 & 0xF))),
+                0xA => Ok(Instruction::LDREGKEY(Reg(opcode.0 & 0xF))),
+                0x15 => Ok(Instruction::LDDTREG(Reg(opcode.0 & 0xF))),
+                0x18 => Ok(Instruction::LDSTREG(Reg(opcode.0 & 0xF))),
+                0x1E => Ok(Instruction::ADDI(Reg(opcode.0 & 0xF))),
                 0x29 => Ok(Instruction::LDISPRITE(opcode.0 & 0xF)),
-                0x33 => Ok(Instruction::LDStoreBCD(opcode.0 & 0xF)),
+                0x33 => Ok(Instruction::LDStoreBCD(Reg(opcode.0 & 0xF))),
                 0x55 => Ok(Instruction::LDStoreRegisters(opcode.0 & 0xF)),
                 0x65 => Ok(Instruction::LDReadRegisters(opcode.0 & 0xF)),
                 _ => {
@@ -153,7 +165,9 @@ pub fn execute_instruction(
                 .memory
                 .get(init..init + v_count as usize)
                 .ok_or("I Pointer got out of bound")?;
-            emulator.registers[..v_count as usize].copy_from_slice(data);
+            for (i, byte) in data.iter().enumerate() {
+                emulator.registers[i as u8] = Reg(*byte);
+            }
         }
         Instruction::LDStoreRegisters(v_count) => {
             let init = emulator.i as usize;
@@ -161,19 +175,21 @@ pub fn execute_instruction(
                 .memory
                 .get_mut(init..init + v_count as usize)
                 .ok_or("I Pointer got out of bound")?;
-            data.copy_from_slice(&emulator.registers[..v_count as usize]);
+            for (i, byte) in emulator.registers[..v_count].iter().enumerate() {
+                data[i] = byte.0;
+            }
         }
         Instruction::LDStoreBCD(vx) => {
             // TODO: Test, not sure if works
-            let bcd = emulator.registers[vx as usize];
-            emulator.memory[emulator.i as usize] = bcd / 100;
-            emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
-            emulator.memory[emulator.i as usize + 2] = bcd % 10;
+            let bcd = emulator.registers[vx];
+            emulator.memory[emulator.i as usize] = bcd.0 / 100;
+            emulator.memory[emulator.i as usize + 1] = bcd.0 % 100 / 10;
+            emulator.memory[emulator.i as usize + 2] = bcd.0 % 10;
         }
         Instruction::LDISPRITE(font_index) => emulator.i = font_index as u16 * 5,
-        Instruction::ADDI(vx) => emulator.i += emulator.registers[vx as usize] as u16,
-        Instruction::LDSTREG(vx) => emulator.sound_timer = emulator.registers[vx as usize],
-        Instruction::LDDTREG(vx) => emulator.delay_timer = emulator.registers[vx as usize],
+        Instruction::ADDI(vx) => emulator.i += emulator.registers[vx].0 as u16,
+        Instruction::LDSTREG(vx) => emulator.sound_timer = emulator.registers[vx].0,
+        Instruction::LDDTREG(vx) => emulator.delay_timer = emulator.registers[vx].0,
         Instruction::LDREGKEY(vx) => {
             let keypad = emulator.keypad;
             if keypad == 0 {
@@ -184,86 +200,87 @@ pub fn execute_instruction(
 
             for i in 0..0x10 {
                 if (1 >> i & keypad) != 0 {
-                    emulator.registers[vx as usize] = i;
+                    emulator.registers[vx] = Reg(i);
                     break;
                 }
             }
         }
-        Instruction::LDREGDT(vx) => emulator.registers[vx as usize] = emulator.delay_timer,
+        Instruction::LDREGDT(vx) => emulator.registers[vx] = Reg(emulator.delay_timer),
         Instruction::SKNP(vx) => {
-            if (1 >> emulator.registers[vx as usize] & emulator.keypad) == 0 {
+            if (1 >> emulator.registers[vx].0 & emulator.keypad) == 0 {
                 emulator.advance();
             }
         }
         Instruction::SKP(vx) => {
-            if (1 >> emulator.registers[vx as usize] & emulator.keypad) != 0 {
+            if (1 >> emulator.registers[vx].0 & emulator.keypad) != 0 {
                 emulator.advance();
             }
         }
         Instruction::DRW(vx, vy, n) => {
             drw(emulator, vx, vy, n)?;
         }
-        Instruction::RND(vx, max) => emulator.registers[vx as usize] = rand::random::<u8>() & max,
+        Instruction::RND(vx, max) => emulator.registers[vx] = Reg(rand::random::<u8>() & max),
         Instruction::LDIAddr(addr) => emulator.i = addr,
         Instruction::V0JP(addr) => {
-            emulator.pc = addr + emulator.registers[0] as u16;
+            emulator.pc = addr + emulator.registers[0].0 as u16;
         }
         Instruction::SHL(vx, _) => {
-            emulator.registers[0xF] = (emulator.registers[vx as usize] & 0b1000000 != 0) as u8;
-            emulator.registers[vx as usize] <<= 1;
+            emulator.registers[0xF] = Reg((emulator.registers[vx].0 & 0b1000000 != 0) as u8);
+            emulator.registers[vx].0 <<= 1;
         }
         Instruction::SUBN(vx, vy) => {
-            let x = emulator.registers[vx as usize];
-            let y = emulator.registers[vy as usize];
-            emulator.registers[0xF] = (y > x) as u8;
-            emulator.registers[vx as usize] = y - x;
+            let x = emulator.registers[vx];
+            let y = emulator.registers[vy];
+            emulator.registers[0xF] = Reg((y > x) as u8);
+            emulator.registers[vx] = Reg(y.0 - x.0);
         }
         Instruction::SHR(vx, _) => {
-            emulator.registers[0xF] = vx & 0b1;
-            emulator.registers[vx as usize] >>= 1;
+            emulator.registers[0xF] = Reg(vx.0 & 0b1);
+            emulator.registers[vx].0 >>= 1;
         }
         Instruction::SUB(vx, vy) => {
-            let x = emulator.registers[vx as usize];
-            let y = emulator.registers[vy as usize];
-            emulator.registers[0xF] = (x > y) as u8;
-            emulator.registers[vx as usize] -= y;
+            let x = emulator.registers[vx];
+            let y = emulator.registers[vy];
+            emulator.registers[0xF] = Reg((x > y) as u8);
+            emulator.registers[vx].0 -= y.0;
         }
         Instruction::XOR(vx, vy) => {
-            emulator.registers[vx as usize] ^= emulator.registers[vy as usize];
+            emulator.registers[vx].0 ^= emulator.registers[vy].0;
         }
         Instruction::AND(vx, vy) => {
-            emulator.registers[vx as usize] &= emulator.registers[vy as usize];
+            emulator.registers[vx].0 &= emulator.registers[vy].0;
         }
         Instruction::OR(vx, vy) => {
-            emulator.registers[vx as usize] |= emulator.registers[vy as usize];
+            emulator.registers[vx].0 |= emulator.registers[vy].0;
         }
-        Instruction::LDREGByte(vx, val) => emulator.registers[vx as usize] = val,
+        Instruction::LDREGByte(vx, val) => emulator.registers[vx] = Reg(val),
         Instruction::ADD(vx, val) => {
-            let (res, overflow) = emulator.registers[vx as usize].overflowing_add(val);
-            emulator.registers[vx as usize] = res;
-            emulator.registers[0xF] = overflow as u8;
+            let (res, overflow) = emulator.registers[vx].0.overflowing_add(val);
+            emulator.registers[vx] = Reg(res);
+            emulator.registers[0xF] = Reg(overflow as u8);
         }
         Instruction::ADDCARRIED(vx, vy) => {
-            let (res, overflow) =
-                emulator.registers[vx as usize].overflowing_add(emulator.registers[vy as usize]);
-            emulator.registers[vx as usize] = res;
-            emulator.registers[0xF] = overflow as u8;
+            let (res, overflow) = emulator.registers[vx]
+                .0
+                .overflowing_add(emulator.registers[vy].0);
+            emulator.registers[vx] = Reg(res);
+            emulator.registers[0xF] = Reg(overflow as u8);
         }
-        Instruction::LDREGREG(vx, vy) => {
-            emulator.registers[vx as usize] = emulator.registers[vy as usize];
+        Instruction::LDREGS(vx, vy) => {
+            emulator.registers[vx] = emulator.registers[vy];
         }
-        Instruction::SEREG(vx, val) => {
-            if emulator.registers[vx as usize] == val {
+        Instruction::SEREGS(vx, val) => {
+            if emulator.registers[vx] == val {
                 emulator.advance()
             }
         }
         Instruction::SNE(vx, val) => {
-            if emulator.registers[vx as usize] != val {
+            if emulator.registers[vx] != Reg(val) {
                 emulator.advance()
             }
         }
         Instruction::SEByte(vx, val) => {
-            if emulator.registers[vx as usize] == val {
+            if emulator.registers[vx] == Reg(val) {
                 emulator.advance();
             }
         }
@@ -272,7 +289,7 @@ pub fn execute_instruction(
             emulator.pc = addr;
         }
         Instruction::SNEREG(vx, vy) => {
-            if emulator.registers[vx as usize] != emulator.registers[vy as usize] {
+            if emulator.registers[vx] != emulator.registers[vy] {
                 emulator.advance();
             }
         }
@@ -281,9 +298,9 @@ pub fn execute_instruction(
 }
 
 // TODO: Think about something better than looping bits, yach
-fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>> {
-    let x_pos = emulator.registers[vx as usize];
-    let y_pos = emulator.registers[vy as usize];
+fn drw(emulator: &mut Chip8, vx: Reg, vy: Reg, n: u8) -> Result<(), Box<dyn Error>> {
+    let x_pos = emulator.registers[vx];
+    let y_pos = emulator.registers[vy];
     let mut collision = false;
     let n = n & 15;
     let sprite = emulator
@@ -292,10 +309,10 @@ fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>
         .ok_or("I pointer got out of bound")?;
 
     for (i, pixel) in sprite.iter().enumerate() {
-        let row = (y_pos as usize + i) % SCREEN_HEIGHT;
+        let row = (y_pos.0 as usize + i) % SCREEN_HEIGHT;
         for bit in 0..8 {
             // TODO: somehow make col 0..8 into a united slice
-            let col = (x_pos + bit) as usize % SCREEN_WIDTH;
+            let col = (x_pos.0 + bit) as usize % SCREEN_WIDTH;
             let location = row * SCREEN_WIDTH + col;
             let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
 
@@ -306,7 +323,7 @@ fn drw(emulator: &mut Chip8, vx: u8, vy: u8, n: u8) -> Result<(), Box<dyn Error>
             emulator.display.mut_data_to_update()[location] ^= new_pixel;
         }
     }
-    emulator.registers[0xF] = collision as u8;
+    emulator.registers[0xF] = Reg(collision as u8);
     Ok(())
 }
 
@@ -324,11 +341,11 @@ mod tests {
     #[test]
     fn test_drw() {
         let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
-        chip.registers[0] = 2;
-        chip.registers[1] = 3;
+        chip.registers[0] = Reg(2);
+        chip.registers[1] = Reg(3);
         chip.i = ROM_START as _;
         chip.memory[ROM_START..ROM_START + 4].copy_from_slice(&[255, 0, 255, 255]);
-        execute_instruction(&mut chip, Instruction::DRW(0, 1, 4)).unwrap();
+        execute_instruction(&mut chip, Instruction::DRW(Reg(0), Reg(1), 4)).unwrap();
         for row in &[3, 5, 6] {
             assert_eq!(
                 chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
