@@ -77,6 +77,9 @@ impl Chip8 {
         self.display.updated()
     }
 
+    pub fn advance(&mut self) {
+        self.pc += 2;
+    }
     // TODO: should return the display, and while dropped Frame reset the display
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
         // TODO: timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
@@ -85,21 +88,22 @@ impl Chip8 {
             let inst = read_instraction(self)?;
             execute_instruction(self, inst)?;
 
-            if self.delay_timer > 0 {
-                update_timer(&mut self.delay_timer, start_iter);
-            }
+            update_timer(&mut self.delay_timer, start_iter);
 
-            if self.sound_timer > 0 {
-                //TODO: beep
-                update_timer(&mut self.sound_timer, start_iter);
-            }
+            //TODO: beep
+            update_timer(&mut self.sound_timer, start_iter);
         }
         Ok(())
     }
 }
 
 fn update_timer(timer: &mut u8, start_iter: Instant) {
-    *timer -= max((Instant::now() - start_iter).as_millis() * 1000 / 60, 0) as u8;
+    let delta_time = max((Instant::now() - start_iter).as_millis() * 1000 / 60, 0) as u8;
+    if *timer > delta_time {
+        *timer -= delta_time;
+    } else {
+        *timer = 0;
+    }
 }
 
 fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
@@ -107,6 +111,6 @@ fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>>
         emulator.memory[emulator.pc as usize],
         emulator.memory[emulator.pc as usize + 1],
     );
-    emulator.pc += 2;
+    emulator.advance();
     Instruction::try_from(opcode)
 }

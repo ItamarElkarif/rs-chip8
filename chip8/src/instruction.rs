@@ -14,17 +14,17 @@ pub enum Instruction {
     LDReadRegisters(u8),
     LDStoreRegisters(u8),
     LDStoreBCD(u8),
-    LDSetISprite(u8),
+    LDISPRITE(u8),
     ADDI(u8),
-    LDSetST(u8),
-    LDSetDT(u8),
-    LDKeyPress(u8),
-    LDGetDT(u8),
+    LDSTREG(u8),
+    LDDTREG(u8),
+    LDREGKEY(u8),
+    LDREGDT(u8),
     SKNP(u8),
     SKP(u8),
     DRW(u8, u8, u8),
     RND(u8, u8),
-    LDSetIAddr(u16),
+    LDIAddr(u16),
     SHL(u8, u8),
     SUBN(u8, u8),
     SHR(u8, u8),
@@ -32,9 +32,9 @@ pub enum Instruction {
     XOR(u8, u8),
     AND(u8, u8),
     OR(u8, u8),
-    LDREGS(u8, u8),
+    LDREGREG(u8, u8),
     ADD(u8, u8),
-    LD(u8, u8),
+    LDREGByte(u8, u8),
     SEREG(u8, u8),
     SNE(u8, u8),
     SEByte(u8, u8),
@@ -63,10 +63,10 @@ impl TryFrom<(u8, u8)> for Instruction {
             0x30 => Ok(Instruction::SEByte(opcode.0 & 0x0F, opcode.1)),
             0x40 => Ok(Instruction::SNE(opcode.0 & 0x0F, opcode.1)),
             0x50 => Ok(Instruction::SEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
-            0x60 => Ok(Instruction::LD(opcode.0 & 0x0F, opcode.1)),
+            0x60 => Ok(Instruction::LDREGByte(opcode.0 & 0x0F, opcode.1)),
             0x70 => Ok(Instruction::ADD(opcode.0 & 0x0F, opcode.1)),
             0x80 => match opcode.1 & 0xF {
-                0x0 => Ok(Instruction::LDREGS(opcode.0 & 0x0F, opcode.1 >> 4)),
+                0x0 => Ok(Instruction::LDREGREG(opcode.0 & 0x0F, opcode.1 >> 4)),
                 0x1 => Ok(Instruction::OR(opcode.0 & 0x0F, opcode.1 >> 4)),
                 0x2 => Ok(Instruction::AND(opcode.0 & 0x0F, opcode.1 >> 4)),
                 0x3 => Ok(Instruction::XOR(opcode.0 & 0x0F, opcode.1 >> 4)),
@@ -82,7 +82,7 @@ impl TryFrom<(u8, u8)> for Instruction {
                 .into()),
             },
             0x90 => Ok(Instruction::SNEREG(opcode.0 & 0x0F, opcode.1 >> 4)),
-            0xA0 => Ok(Instruction::LDSetIAddr(Xnnn!(opcode.0, opcode.1))),
+            0xA0 => Ok(Instruction::LDIAddr(Xnnn!(opcode.0, opcode.1))),
             0xB0 => Ok(Instruction::V0JP(Xnnn!(opcode.0, opcode.1))),
             0xC0 => Ok(Instruction::RND(opcode.0 & 0x0F, opcode.1)),
             0xD0 => Ok(Instruction::DRW(
@@ -98,12 +98,12 @@ impl TryFrom<(u8, u8)> for Instruction {
                 }
             },
             0xF0 => match opcode.1 {
-                0x7 => Ok(Instruction::LDGetDT(opcode.0 & 0xF)),
-                0xA => Ok(Instruction::LDKeyPress(opcode.0 & 0xF)),
-                0x15 => Ok(Instruction::LDSetDT(opcode.0 & 0xF)),
-                0x18 => Ok(Instruction::LDSetST(opcode.0 & 0xF)),
+                0x7 => Ok(Instruction::LDREGDT(opcode.0 & 0xF)),
+                0xA => Ok(Instruction::LDREGKEY(opcode.0 & 0xF)),
+                0x15 => Ok(Instruction::LDDTREG(opcode.0 & 0xF)),
+                0x18 => Ok(Instruction::LDSTREG(opcode.0 & 0xF)),
                 0x1E => Ok(Instruction::ADDI(opcode.0 & 0xF)),
-                0x29 => Ok(Instruction::LDSetISprite(opcode.0 & 0xF)),
+                0x29 => Ok(Instruction::LDISPRITE(opcode.0 & 0xF)),
                 0x33 => Ok(Instruction::LDStoreBCD(opcode.0 & 0xF)),
                 0x55 => Ok(Instruction::LDStoreRegisters(opcode.0 & 0xF)),
                 0x65 => Ok(Instruction::LDReadRegisters(opcode.0 & 0xF)),
@@ -131,6 +131,7 @@ pub fn execute_instruction(
     emulator: &mut Chip8,
     instruction: Instruction,
 ) -> Result<(), Box<dyn Error>> {
+    dbg!(format!("{instruction:?}, {:X}", emulator.pc - 0x200));
     // TODO: replace registers with Reg(u8) being indexed, problem with range of Regs
     match instruction {
         Instruction::CLS => {
@@ -169,16 +170,17 @@ pub fn execute_instruction(
             emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
             emulator.memory[emulator.i as usize + 2] = bcd % 10;
         }
-        Instruction::LDSetISprite(vx) => emulator.i = vx as u16 * 5,
+        Instruction::LDISPRITE(font_index) => emulator.i = font_index as u16 * 5,
         Instruction::ADDI(vx) => emulator.i += emulator.registers[vx as usize] as u16,
-        Instruction::LDSetST(vx) => emulator.sound_timer = emulator.registers[vx as usize],
-        Instruction::LDSetDT(vx) => emulator.delay_timer = emulator.registers[vx as usize],
-        Instruction::LDKeyPress(vx) => {
+        Instruction::LDSTREG(vx) => emulator.sound_timer = emulator.registers[vx as usize],
+        Instruction::LDDTREG(vx) => emulator.delay_timer = emulator.registers[vx as usize],
+        Instruction::LDREGKEY(vx) => {
             let keypad = emulator.keypad;
             if keypad == 0 {
                 emulator.pc -= 2;
                 return Ok(());
             }
+            dbg!(keypad);
 
             for i in 0..0x10 {
                 if (1 >> i & keypad) != 0 {
@@ -187,22 +189,22 @@ pub fn execute_instruction(
                 }
             }
         }
-        Instruction::LDGetDT(vx) => emulator.registers[vx as usize] = emulator.delay_timer,
+        Instruction::LDREGDT(vx) => emulator.registers[vx as usize] = emulator.delay_timer,
         Instruction::SKNP(vx) => {
             if (1 >> emulator.registers[vx as usize] & emulator.keypad) == 0 {
-                emulator.pc += 2;
+                emulator.advance();
             }
         }
         Instruction::SKP(vx) => {
             if (1 >> emulator.registers[vx as usize] & emulator.keypad) != 0 {
-                emulator.pc += 2;
+                emulator.advance();
             }
         }
         Instruction::DRW(vx, vy, n) => {
             drw(emulator, vx, vy, n)?;
         }
         Instruction::RND(vx, max) => emulator.registers[vx as usize] = rand::random::<u8>() & max,
-        Instruction::LDSetIAddr(addr) => emulator.i = addr,
+        Instruction::LDIAddr(addr) => emulator.i = addr,
         Instruction::V0JP(addr) => {
             emulator.pc = addr + emulator.registers[0] as u16;
         }
@@ -235,9 +237,11 @@ pub fn execute_instruction(
         Instruction::OR(vx, vy) => {
             emulator.registers[vx as usize] |= emulator.registers[vy as usize];
         }
-        Instruction::LD(vx, val) => emulator.registers[vx as usize] = val,
+        Instruction::LDREGByte(vx, val) => emulator.registers[vx as usize] = val,
         Instruction::ADD(vx, val) => {
-            emulator.registers[vx as usize] += val;
+            let (res, overflow) = emulator.registers[vx as usize].overflowing_add(val);
+            emulator.registers[vx as usize] = res;
+            emulator.registers[0xF] = overflow as u8;
         }
         Instruction::ADDCARRIED(vx, vy) => {
             let (res, overflow) =
@@ -245,22 +249,22 @@ pub fn execute_instruction(
             emulator.registers[vx as usize] = res;
             emulator.registers[0xF] = overflow as u8;
         }
-        Instruction::LDREGS(vx, vy) => {
+        Instruction::LDREGREG(vx, vy) => {
             emulator.registers[vx as usize] = emulator.registers[vy as usize];
         }
         Instruction::SEREG(vx, val) => {
             if emulator.registers[vx as usize] == val {
-                emulator.pc += 2
+                emulator.advance()
             }
         }
         Instruction::SNE(vx, val) => {
             if emulator.registers[vx as usize] != val {
-                emulator.pc += 2
+                emulator.advance()
             }
         }
         Instruction::SEByte(vx, val) => {
             if emulator.registers[vx as usize] == val {
-                emulator.pc += 1;
+                emulator.advance();
             }
         }
         Instruction::CALL(addr) => {
@@ -269,7 +273,7 @@ pub fn execute_instruction(
         }
         Instruction::SNEREG(vx, vy) => {
             if emulator.registers[vx as usize] != emulator.registers[vy as usize] {
-                emulator.pc += 1;
+                emulator.advance();
             }
         }
     };
@@ -336,7 +340,7 @@ mod tests {
     #[test]
     fn test_set_i_sprite() {
         let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
-        execute_instruction(&mut chip, Instruction::LDSetISprite(3)).unwrap();
+        execute_instruction(&mut chip, Instruction::LDISPRITE(3)).unwrap();
         assert_eq!(chip.i, 5 * 3);
         assert_eq!(
             &chip.memory[chip.i as usize..chip.i as usize + 5],
