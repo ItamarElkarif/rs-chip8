@@ -9,7 +9,18 @@ use std::{error::Error, path::Path};
 
 struct ConsoleUI();
 impl ConsoleUI {
-    fn update(&self, display: &chip8::DisplayData) {
+    fn run(mut chip: chip8::Chip8) {
+        loop {
+            chip.run_frame().unwrap();
+            if chip.updated_display() {
+                chip.reset_updated();
+                ConsoleUI::update(chip.display());
+            }
+            // std::thread::sleep(Duration::from_millis(17));
+        }
+    }
+
+    fn update(display: &chip8::DisplayData) {
         print!("{esc}c", esc = 27 as char);
         for row in display.chunks(chip8::SCREEN_WIDTH) {
             println!(
@@ -72,9 +83,8 @@ impl eframe::App for App {
         });
 
         if self.chip.updated_display() {
-            self.chip.updated();
+            self.chip.reset_updated();
         }
-
         ctx.request_repaint();
     }
 }
@@ -116,6 +126,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut rom = Vec::with_capacity(MEM_SIZE);
     File::open(Path::new("D:/Code/rust/rs-chip8/PONG.ch8"))?.read_to_end(&mut rom)?;
     let chip = Chip8::new(&rom[..])?;
+
+    // ConsoleUI::run(chip);
     eframe::run_native(
         "Chip8",
         eframe::NativeOptions::default(),
