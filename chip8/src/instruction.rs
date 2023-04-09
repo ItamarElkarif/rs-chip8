@@ -1,4 +1,7 @@
-use crate::{registers::Reg, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{
+    registers::{Reg, RegIndex},
+    SCREEN_HEIGHT, SCREEN_WIDTH,
+};
 use std::error::Error;
 
 use crate::Chip8;
@@ -13,34 +16,34 @@ pub enum Instruction {
     V0JP(u16),
     LDReadRegisters(u8),
     LDStoreRegisters(u8),
-    LDStoreBCD(Reg),
+    LDStoreBCD(RegIndex),
     LDISPRITE(u8),
-    ADDI(Reg),
-    LDSTREG(Reg),
-    LDDTREG(Reg),
-    LDREGKEY(Reg),
-    LDREGDT(Reg),
-    SKNP(Reg),
-    SKP(Reg),
-    DRW(Reg, Reg, u8),
-    RND(Reg, u8),
+    ADDI(RegIndex),
+    LDSTREG(RegIndex),
+    LDDTREG(RegIndex),
+    LDREGKEY(RegIndex),
+    LDREGDT(RegIndex),
+    SKNP(RegIndex),
+    SKP(RegIndex),
+    DRW(RegIndex, RegIndex, u8),
+    RND(RegIndex, u8),
     LDIAddr(u16),
-    SHL(Reg, Reg),
-    SUBN(Reg, Reg),
-    SHR(Reg, Reg),
-    SUB(Reg, Reg),
-    XOR(Reg, Reg),
-    AND(Reg, Reg),
-    OR(Reg, Reg),
-    LDREGS(Reg, Reg),
-    ADD(Reg, u8),
-    LDREGByte(Reg, u8),
-    SEREGS(Reg, Reg),
-    SNE(Reg, u8),
-    SEByte(Reg, u8),
+    SHL(RegIndex, RegIndex),
+    SUBN(RegIndex, RegIndex),
+    SHR(RegIndex, RegIndex),
+    SUB(RegIndex, RegIndex),
+    XOR(RegIndex, RegIndex),
+    AND(RegIndex, RegIndex),
+    OR(RegIndex, RegIndex),
+    LDREGS(RegIndex, RegIndex),
+    ADD(RegIndex, u8),
+    LDREGByte(RegIndex, u8),
+    SEREGS(RegIndex, RegIndex),
+    SNE(RegIndex, u8),
+    SEByte(RegIndex, u8),
     CALL(u16),
-    ADDCARRIED(Reg, Reg),
-    SNEREG(Reg, Reg),
+    ADDCARRIED(RegIndex, RegIndex),
+    SNEREG(RegIndex, RegIndex),
 }
 
 macro_rules! Xnnn {
@@ -60,30 +63,51 @@ impl TryFrom<(u8, u8)> for Instruction {
             },
             0x10 => Ok(Instruction::JP(Xnnn!(opcode.0, opcode.1))),
             0x20 => Ok(Instruction::CALL(Xnnn!(opcode.0, opcode.1))),
-            0x30 => Ok(Instruction::SEByte(Reg(opcode.0 & 0x0F), opcode.1)),
-            0x40 => Ok(Instruction::SNE(Reg(opcode.0 & 0x0F), opcode.1)),
+            0x30 => Ok(Instruction::SEByte(RegIndex(opcode.0 & 0x0F), opcode.1)),
+            0x40 => Ok(Instruction::SNE(RegIndex(opcode.0 & 0x0F), opcode.1)),
             0x50 => Ok(Instruction::SEREGS(
-                Reg(opcode.0 & 0x0F),
-                Reg(opcode.1 >> 4),
+                RegIndex(opcode.0 & 0x0F),
+                RegIndex(opcode.1 >> 4),
             )),
-            0x60 => Ok(Instruction::LDREGByte(Reg(opcode.0 & 0x0F), opcode.1)),
-            0x70 => Ok(Instruction::ADD(Reg(opcode.0 & 0x0F), opcode.1)),
+            0x60 => Ok(Instruction::LDREGByte(RegIndex(opcode.0 & 0x0F), opcode.1)),
+            0x70 => Ok(Instruction::ADD(RegIndex(opcode.0 & 0x0F), opcode.1)),
             0x80 => match opcode.1 & 0xF {
                 0x0 => Ok(Instruction::LDREGS(
-                    Reg(opcode.0 & 0x0F),
-                    Reg(opcode.1 >> 4),
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
                 )),
-                0x1 => Ok(Instruction::OR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
-                0x2 => Ok(Instruction::AND(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
-                0x3 => Ok(Instruction::XOR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x1 => Ok(Instruction::OR(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
+                0x2 => Ok(Instruction::AND(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
+                0x3 => Ok(Instruction::XOR(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
                 0x4 => Ok(Instruction::ADDCARRIED(
-                    Reg(opcode.0 & 0x0F),
-                    Reg(opcode.1 >> 4),
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
                 )),
-                0x5 => Ok(Instruction::SUB(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
-                0x6 => Ok(Instruction::SHR(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
-                0x7 => Ok(Instruction::SUBN(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
-                0xE => Ok(Instruction::SHL(Reg(opcode.0 & 0x0F), Reg(opcode.1 >> 4))),
+                0x5 => Ok(Instruction::SUB(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
+                0x6 => Ok(Instruction::SHR(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
+                0x7 => Ok(Instruction::SUBN(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
+                0xE => Ok(Instruction::SHL(
+                    RegIndex(opcode.0 & 0x0F),
+                    RegIndex(opcode.1 >> 4),
+                )),
                 _ => Err(format!(
                     "Invalid Instruction Inside 0x8 {:X}{:X}",
                     opcode.0, opcode.1
@@ -91,32 +115,32 @@ impl TryFrom<(u8, u8)> for Instruction {
                 .into()),
             },
             0x90 => Ok(Instruction::SNEREG(
-                Reg(opcode.0 & 0x0F),
-                Reg(opcode.1 >> 4),
+                RegIndex(opcode.0 & 0x0F),
+                RegIndex(opcode.1 >> 4),
             )),
             0xA0 => Ok(Instruction::LDIAddr(Xnnn!(opcode.0, opcode.1))),
             0xB0 => Ok(Instruction::V0JP(Xnnn!(opcode.0, opcode.1))),
-            0xC0 => Ok(Instruction::RND(Reg(opcode.0 & 0x0F), opcode.1)),
+            0xC0 => Ok(Instruction::RND(RegIndex(opcode.0 & 0x0F), opcode.1)),
             0xD0 => Ok(Instruction::DRW(
-                Reg(opcode.0 & 0x0F),
-                Reg((opcode.1 >> 4) & 0x0F),
+                RegIndex(opcode.0 & 0x0F),
+                RegIndex((opcode.1 >> 4) & 0x0F),
                 opcode.1 & 0x0F,
             )),
             0xE0 => match opcode.1 {
-                0x9E => Ok(Instruction::SKP(Reg(opcode.0 & 0x0F))),
-                0xA1 => Ok(Instruction::SKNP(Reg(opcode.0 & 0x0F))),
+                0x9E => Ok(Instruction::SKP(RegIndex(opcode.0 & 0x0F))),
+                0xA1 => Ok(Instruction::SKNP(RegIndex(opcode.0 & 0x0F))),
                 _ => {
                     Err(format!("Invalid Instruction Inside E {:X}{:X}", opcode.0, opcode.1).into())
                 }
             },
             0xF0 => match opcode.1 {
-                0x7 => Ok(Instruction::LDREGDT(Reg(opcode.0 & 0xF))),
-                0xA => Ok(Instruction::LDREGKEY(Reg(opcode.0 & 0xF))),
-                0x15 => Ok(Instruction::LDDTREG(Reg(opcode.0 & 0xF))),
-                0x18 => Ok(Instruction::LDSTREG(Reg(opcode.0 & 0xF))),
-                0x1E => Ok(Instruction::ADDI(Reg(opcode.0 & 0xF))),
+                0x7 => Ok(Instruction::LDREGDT(RegIndex(opcode.0 & 0xF))),
+                0xA => Ok(Instruction::LDREGKEY(RegIndex(opcode.0 & 0xF))),
+                0x15 => Ok(Instruction::LDDTREG(RegIndex(opcode.0 & 0xF))),
+                0x18 => Ok(Instruction::LDSTREG(RegIndex(opcode.0 & 0xF))),
+                0x1E => Ok(Instruction::ADDI(RegIndex(opcode.0 & 0xF))),
                 0x29 => Ok(Instruction::LDISPRITE(opcode.0 & 0xF)),
-                0x33 => Ok(Instruction::LDStoreBCD(Reg(opcode.0 & 0xF))),
+                0x33 => Ok(Instruction::LDStoreBCD(RegIndex(opcode.0 & 0xF))),
                 0x55 => Ok(Instruction::LDStoreRegisters(opcode.0 & 0xF)),
                 0x65 => Ok(Instruction::LDReadRegisters(opcode.0 & 0xF)),
                 _ => {
@@ -143,8 +167,6 @@ pub fn execute_instruction(
     emulator: &mut Chip8,
     instruction: Instruction,
 ) -> Result<(), Box<dyn Error>> {
-    dbg!(format!("{instruction:?}, {:X}", emulator.pc - 0x200));
-    // TODO: replace registers with Reg(u8) being indexed, problem with range of Regs
     match instruction {
         Instruction::CLS => {
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
@@ -269,8 +291,8 @@ pub fn execute_instruction(
         Instruction::LDREGS(vx, vy) => {
             emulator.registers[vx] = emulator.registers[vy];
         }
-        Instruction::SEREGS(vx, val) => {
-            if emulator.registers[vx] == val {
+        Instruction::SEREGS(vx, vy) => {
+            if emulator.registers[vx] == emulator.registers[vy] {
                 emulator.advance()
             }
         }
@@ -298,7 +320,7 @@ pub fn execute_instruction(
 }
 
 // TODO: Think about something better than looping bits, yach
-fn drw(emulator: &mut Chip8, vx: Reg, vy: Reg, n: u8) -> Result<(), Box<dyn Error>> {
+fn drw(emulator: &mut Chip8, vx: RegIndex, vy: RegIndex, n: u8) -> Result<(), Box<dyn Error>> {
     let x_pos = emulator.registers[vx];
     let y_pos = emulator.registers[vy];
     let mut collision = false;
@@ -345,7 +367,7 @@ mod tests {
         chip.registers[1] = Reg(3);
         chip.i = ROM_START as _;
         chip.memory[ROM_START..ROM_START + 4].copy_from_slice(&[255, 0, 255, 255]);
-        execute_instruction(&mut chip, Instruction::DRW(Reg(0), Reg(1), 4)).unwrap();
+        execute_instruction(&mut chip, Instruction::DRW(RegIndex(0), RegIndex(1), 4)).unwrap();
         for row in &[3, 5, 6] {
             assert_eq!(
                 chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],

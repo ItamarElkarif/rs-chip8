@@ -71,7 +71,8 @@ impl Chip8 {
         self.display.data()
     }
 
-    pub fn updated(&mut self) {
+    // TODO: make it automatic after using it in the exe
+    pub fn reset_updated(&mut self) {
         self.display.reset_updated()
     }
 
