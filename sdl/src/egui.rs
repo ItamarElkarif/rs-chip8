@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chip8::{Chip8, SCREEN_HEIGHT, SCREEN_WIDTH};
+use chip8::{Chip8, FRAME_DURATION, SCREEN_HEIGHT, SCREEN_WIDTH};
 use egui::*;
 pub struct App {
     chip: Chip8,
@@ -21,7 +21,7 @@ impl eframe::App for App {
         if self.chip.updated_display() {
             self.chip.reset_updated();
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(FRAME_DURATION);
     }
 }
 

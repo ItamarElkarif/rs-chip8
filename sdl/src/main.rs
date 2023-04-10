@@ -12,8 +12,7 @@ trait Ui {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rom = Vec::with_capacity(MEM_SIZE);
-    // File::open(Path::new("D:/Code/rust/rs-chip8/PONG.ch8"))?.read_to_end(&mut rom)?;
-    File::open(Path::new("D:/Code/rust/rs-chip8/15PUZZLE.ch8"))?.read_to_end(&mut rom)?;
+    File::open(Path::new("D:/Code/rust/rs-chip8/INVADERS.ch8"))?.read_to_end(&mut rom)?;
     let chip = Chip8::new(&rom[..])?;
 
     egui::App::run(chip);

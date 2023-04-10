@@ -1,5 +1,5 @@
 use crate::{registers::RegIndex, SCREEN_HEIGHT, SCREEN_WIDTH};
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use crate::Chip8;
 
@@ -160,20 +160,26 @@ impl TryFrom<(u8, u8)> for Instruction {
     }
 }
 
-pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box<dyn Error>> {
+pub fn execute(
+    emulator: &mut Chip8,
+    instruction: Instruction,
+) -> Result<std::time::Duration, Box<dyn Error>> {
     match instruction {
         Instruction::CLS => {
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+            Ok(Duration::from_micros(109))
         }
         Instruction::RET => {
             emulator.pc = emulator
                 .stack
                 .pop()
                 .ok_or("Can't return root function, the stack is empty")?;
+            Ok(Duration::from_micros(105))
         }
         Instruction::SysJump(_) => unreachable!(),
         Instruction::JP(addr) => {
             emulator.pc = addr;
+            Ok(Duration::from_micros(105))
         }
         Instruction::LDReadRegisters(v_count) => {
             let init = emulator.i as usize;
@@ -184,6 +190,7 @@ pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box
             for (i, byte) in data.iter().enumerate() {
                 emulator.registers[RegIndex(i as u8)] = *byte;
             }
+            Ok(Duration::from_micros(605))
         }
         Instruction::LDStoreRegisters(v_count) => {
             let init = emulator.i as usize;
@@ -197,6 +204,7 @@ pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box
             {
                 data[i] = *byte;
             }
+            Ok(Duration::from_micros(605))
         }
         Instruction::LDStoreBCD(vx) => {
             // TODO: Test, not sure if works
@@ -204,114 +212,159 @@ pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box
             emulator.memory[emulator.i as usize] = bcd / 100;
             emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
             emulator.memory[emulator.i as usize + 2] = bcd % 10;
+            Ok(Duration::from_micros(927))
         }
-        Instruction::LDISPRITE(vx) => emulator.i = emulator.registers[vx] as u16 * 5,
-        Instruction::ADDI(vx) => emulator.i += emulator.registers[vx] as u16,
-        Instruction::LDSTREG(vx) => emulator.sound_timer = emulator.registers[vx],
-        Instruction::LDDTREG(vx) => emulator.delay_timer = emulator.registers[vx],
+        Instruction::LDISPRITE(vx) => {
+            emulator.i = emulator.registers[vx] as u16 * 5;
+            Ok(Duration::from_micros(91))
+        }
+        Instruction::ADDI(vx) => {
+            emulator.i += emulator.registers[vx] as u16;
+            Ok(Duration::from_micros(86))
+        }
+        Instruction::LDSTREG(vx) => {
+            emulator.sound_timer = emulator.registers[vx];
+            Ok(Duration::from_micros(45))
+        }
+        Instruction::LDDTREG(vx) => {
+            emulator.delay_timer = emulator.registers[vx];
+            Ok(Duration::from_micros(45))
+        }
         Instruction::LDREGKEY(vx) => {
             let keypad = emulator.keypad;
             if keypad == 0 {
                 emulator.pc -= 2;
-                return Ok(());
+                return Ok(Duration::from_micros(200));
             }
 
             for i in 0..0x10 {
-                if (1 >> i & keypad) != 0 {
+                if (1 << i & keypad) != 0 {
                     emulator.registers[vx] = i;
                     break;
                 }
             }
+            Ok(Duration::from_micros(200))
         }
-        Instruction::LDREGDT(vx) => emulator.registers[vx] = emulator.delay_timer,
+        Instruction::LDREGDT(vx) => {
+            emulator.registers[vx] = emulator.delay_timer;
+            Ok(Duration::from_micros(45))
+        }
         Instruction::SKNP(vx) => {
             if (1 << emulator.registers[vx] & emulator.keypad) == 0 {
                 emulator.advance();
             }
+            Ok(Duration::from_micros(73))
         }
         Instruction::SKP(vx) => {
             if (1 << emulator.registers[vx] & emulator.keypad) != 0 {
                 emulator.advance();
             }
+            Ok(Duration::from_micros(73))
         }
         Instruction::DRW(vx, vy, n) => {
             drw(emulator, vx, vy, n)?;
+
+            Ok(Duration::from_micros(22734))
         }
-        Instruction::RND(vx, max) => emulator.registers[vx] = rand::random::<u8>() & max,
-        Instruction::LDIAddr(addr) => emulator.i = addr,
+        Instruction::RND(vx, max) => {
+            emulator.registers[vx] = rand::random::<u8>() & max;
+            Ok(Duration::from_micros(164))
+        }
+        Instruction::LDIAddr(addr) => {
+            emulator.i = addr;
+            Ok(Duration::from_micros(55))
+        }
         Instruction::V0JP(addr) => {
             emulator.pc = addr + emulator.registers[RegIndex(0)] as u16;
+            Ok(Duration::from_micros(105))
         }
         Instruction::SHL(vx, _) => {
             emulator.registers[RegIndex(0xF)] = (emulator.registers[vx] & 0b1000000 != 0) as u8;
             emulator.registers[vx] <<= 1;
+            Ok(Duration::from_micros(200))
         }
         Instruction::SUBN(vx, vy) => {
             let x = emulator.registers[vx];
             let y = emulator.registers[vy];
             emulator.registers[RegIndex(0xF)] = (y > x) as u8;
             emulator.registers[vx] = y - x;
+            Ok(Duration::from_micros(200))
         }
         Instruction::SHR(vx, _) => {
             emulator.registers[RegIndex(0xF)] = emulator.registers[vx] & 0b1;
             emulator.registers[vx] >>= 1;
+            Ok(Duration::from_micros(200))
         }
         Instruction::SUB(vx, vy) => {
             let x = emulator.registers[vx];
             let y = emulator.registers[vy];
             emulator.registers[RegIndex(0xF)] = (x > y) as u8;
             (emulator.registers[vx], _) = emulator.registers[vx].overflowing_sub(y);
+            Ok(Duration::from_micros(200))
         }
         Instruction::XOR(vx, vy) => {
             emulator.registers[vx] ^= emulator.registers[vy];
+            Ok(Duration::from_micros(200))
         }
         Instruction::AND(vx, vy) => {
             emulator.registers[vx] &= emulator.registers[vy];
+            Ok(Duration::from_micros(200))
         }
         Instruction::OR(vx, vy) => {
             emulator.registers[vx] |= emulator.registers[vy];
+            Ok(Duration::from_micros(200))
         }
-        Instruction::LDREGByte(vx, val) => emulator.registers[vx] = val,
+        Instruction::LDREGByte(vx, val) => {
+            emulator.registers[vx] = val;
+            Ok(Duration::from_micros(27))
+        }
         Instruction::ADD(vx, val) => {
-            let (res, overflow) = emulator.registers[vx].overflowing_add(val);
+            let (res, _overflow) = emulator.registers[vx].overflowing_add(val);
             emulator.registers[vx] = res;
-            emulator.registers[RegIndex(0xF)] = overflow as u8;
+            // emulator.registers[RegIndex(0xF)] = overflow as u8;
+            Ok(Duration::from_micros(45))
         }
         Instruction::ADDCARRIED(vx, vy) => {
             let (res, overflow) = emulator.registers[vx].overflowing_add(emulator.registers[vy]);
             emulator.registers[vx] = res;
             emulator.registers[RegIndex(0xF)] = overflow as u8;
+            Ok(Duration::from_micros(200))
         }
         Instruction::LDREGS(vx, vy) => {
             emulator.registers[vx] = emulator.registers[vy];
+            Ok(Duration::from_micros(200))
         }
         Instruction::SEREGS(vx, vy) => {
             if emulator.registers[vx] == emulator.registers[vy] {
                 emulator.advance()
             }
+            Ok(Duration::from_micros(73))
         }
         Instruction::SNE(vx, val) => {
             if emulator.registers[vx] != (val) {
                 emulator.advance()
             }
+            Ok(Duration::from_micros(55))
         }
         Instruction::SEByte(vx, val) => {
             if emulator.registers[vx] == val {
                 emulator.advance();
             }
+            Ok(Duration::from_micros(55))
         }
         Instruction::CALL(addr) => {
             // Since I'm advancing the pc before the instruction, pc will be at least 2
             emulator.stack.push(emulator.pc)?;
             emulator.pc = addr;
+            Ok(Duration::from_micros(105))
         }
         Instruction::SNEREG(vx, vy) => {
             if emulator.registers[vx] != emulator.registers[vy] {
                 emulator.advance();
             }
+            Ok(Duration::from_micros(73))
         }
-    };
-    Ok(())
+    }
 }
 
 pub fn read(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {

@@ -1,9 +1,5 @@
 #![allow(dead_code)]
-use std::{
-    cmp::max,
-    error::Error,
-    time::{Duration, Instant},
-};
+use std::{cmp::max, error::Error, time::Duration};
 
 pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
@@ -85,25 +81,26 @@ impl Chip8 {
     }
 
     // TODO: should return the display, and while dropped Frame reset the display
+    // Make the return type an Result<Option<Display>, Box<dyn Error>> and NONE if not changed
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
-        // TODO: timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
-        let start_iter = Instant::now();
-        while (Instant::now() - start_iter) < FRAME_DURATION {
+        let mut duration_left = FRAME_DURATION;
+        while duration_left > Duration::ZERO {
             let inst = instruction::read(self)?;
 
-            execute(self, inst)?;
+            let took = execute(self, inst)?;
 
-            update_timer(&mut self.delay_timer, start_iter);
+            duration_left = duration_left.saturating_sub(took);
+            update_timer(&mut self.delay_timer, duration_left);
 
             //TODO: beep
-            update_timer(&mut self.sound_timer, start_iter);
+            update_timer(&mut self.sound_timer, duration_left);
         }
         Ok(())
     }
 }
 
-fn update_timer(timer: &mut u8, start_iter: Instant) {
-    let delta_time = max((Instant::now() - start_iter).as_millis() * 1000 / 60, 0) as u8;
+fn update_timer(timer: &mut u8, left: Duration) {
+    let delta_time = max(left.as_millis() * 1000 / 60, 0) as u8;
     if *timer > delta_time {
         *timer -= delta_time;
     } else {
