@@ -230,7 +230,7 @@ pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box
             }
         }
         Instruction::SKP(vx) => {
-            if (1 >> emulator.registers[vx] & emulator.keypad) != 0 {
+            if (1 << emulator.registers[vx] & emulator.keypad) != 0 {
                 emulator.advance();
             }
         }
