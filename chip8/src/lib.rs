@@ -83,6 +83,7 @@ impl Chip8 {
     pub fn advance(&mut self) {
         self.pc += 2;
     }
+
     // TODO: should return the display, and while dropped Frame reset the display
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
         // TODO: timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html

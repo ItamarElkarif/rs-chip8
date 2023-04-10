@@ -1,3 +1,4 @@
+// TODO: Gather with instuction/stack for memory stuff?
 use std::ops::{Index, IndexMut, Range, RangeFrom, RangeTo};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

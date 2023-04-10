@@ -14,7 +14,7 @@ pub enum Instruction {
     LDReadRegisters(u8),
     LDStoreRegisters(u8),
     LDStoreBCD(RegIndex),
-    LDISPRITE(u8),
+    LDISPRITE(RegIndex),
     ADDI(RegIndex),
     LDSTREG(RegIndex),
     LDDTREG(RegIndex),
@@ -136,7 +136,7 @@ impl TryFrom<(u8, u8)> for Instruction {
                 0x15 => Ok(Instruction::LDDTREG(RegIndex(opcode.0 & 0xF))),
                 0x18 => Ok(Instruction::LDSTREG(RegIndex(opcode.0 & 0xF))),
                 0x1E => Ok(Instruction::ADDI(RegIndex(opcode.0 & 0xF))),
-                0x29 => Ok(Instruction::LDISPRITE(opcode.0 & 0xF)),
+                0x29 => Ok(Instruction::LDISPRITE(RegIndex(opcode.0 & 0xF))),
                 0x33 => Ok(Instruction::LDStoreBCD(RegIndex(opcode.0 & 0xF))),
                 0x55 => Ok(Instruction::LDStoreRegisters(opcode.0 & 0xF)),
                 0x65 => Ok(Instruction::LDReadRegisters(opcode.0 & 0xF)),
@@ -182,7 +182,7 @@ pub fn execute_instruction(
             let init = emulator.i as usize;
             let data = &emulator
                 .memory
-                .get(init..init + v_count as usize)
+                .get(init..init + v_count as usize + 1)
                 .ok_or("I Pointer got out of bound")?;
             for (i, byte) in data.iter().enumerate() {
                 emulator.registers[RegIndex(i as u8)] = *byte;
@@ -192,9 +192,12 @@ pub fn execute_instruction(
             let init = emulator.i as usize;
             let data = emulator
                 .memory
-                .get_mut(init..init + v_count as usize)
+                .get_mut(init..init + v_count as usize + 1)
                 .ok_or("I Pointer got out of bound")?;
-            for (i, byte) in emulator.registers[..RegIndex(v_count)].iter().enumerate() {
+            for (i, byte) in emulator.registers[..RegIndex(v_count + 1)]
+                .iter()
+                .enumerate()
+            {
                 data[i] = *byte;
             }
         }
@@ -205,7 +208,7 @@ pub fn execute_instruction(
             emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
             emulator.memory[emulator.i as usize + 2] = bcd % 10;
         }
-        Instruction::LDISPRITE(font_index) => emulator.i = font_index as u16 * 5,
+        Instruction::LDISPRITE(vx) => emulator.i = emulator.registers[vx] as u16 * 5,
         Instruction::ADDI(vx) => emulator.i += emulator.registers[vx] as u16,
         Instruction::LDSTREG(vx) => emulator.sound_timer = emulator.registers[vx],
         Instruction::LDDTREG(vx) => emulator.delay_timer = emulator.registers[vx],
@@ -215,7 +218,6 @@ pub fn execute_instruction(
                 emulator.pc -= 2;
                 return Ok(());
             }
-            dbg!(keypad);
 
             for i in 0..0x10 {
                 if (1 >> i & keypad) != 0 {
@@ -226,7 +228,7 @@ pub fn execute_instruction(
         }
         Instruction::LDREGDT(vx) => emulator.registers[vx] = emulator.delay_timer,
         Instruction::SKNP(vx) => {
-            if (1 >> emulator.registers[vx] & emulator.keypad) == 0 {
+            if (1 << emulator.registers[vx] & emulator.keypad) == 0 {
                 emulator.advance();
             }
         }
@@ -261,7 +263,7 @@ pub fn execute_instruction(
             let x = emulator.registers[vx];
             let y = emulator.registers[vy];
             emulator.registers[RegIndex(0xF)] = (x > y) as u8;
-            emulator.registers[vx] -= y;
+            (emulator.registers[vx], _) = emulator.registers[vx].overflowing_sub(y);
         }
         Instruction::XOR(vx, vy) => {
             emulator.registers[vx] ^= emulator.registers[vy];
@@ -297,11 +299,12 @@ pub fn execute_instruction(
             }
         }
         Instruction::SEByte(vx, val) => {
-            if emulator.registers[vx] == (val) {
+            if emulator.registers[vx] == val {
                 emulator.advance();
             }
         }
         Instruction::CALL(addr) => {
+            // Since I'm advancing the pc before the instruction, pc will be at least 2
             emulator.stack.push(emulator.pc)?;
             emulator.pc = addr;
         }
