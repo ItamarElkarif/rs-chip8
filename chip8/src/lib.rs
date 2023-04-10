@@ -17,7 +17,7 @@ mod stack;
 
 use display::Display;
 pub use display::{DisplayData, SCREEN_HEIGHT, SCREEN_WIDTH, UI};
-use instruction::{execute_instruction, Instruction};
+use instruction::execute;
 use registers::Regs;
 use resources::SPRITE_ADDR;
 use stack::Stack;
@@ -89,8 +89,9 @@ impl Chip8 {
         // TODO: timers (delay and sound) - implement it better! Maybe with https://jackson-s.me/2019/07/13/Chip-8-Instruction-Scheduling-and-Frequency.html
         let start_iter = Instant::now();
         while (Instant::now() - start_iter) < FRAME_DURATION {
-            let inst = read_instraction(self)?;
-            execute_instruction(self, inst)?;
+            let inst = instruction::read(self)?;
+
+            execute(self, inst)?;
 
             update_timer(&mut self.delay_timer, start_iter);
 
@@ -108,13 +109,4 @@ fn update_timer(timer: &mut u8, start_iter: Instant) {
     } else {
         *timer = 0;
     }
-}
-
-fn read_instraction(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
-    let opcode: (u8, u8) = (
-        emulator.memory[emulator.pc as usize],
-        emulator.memory[emulator.pc as usize + 1],
-    );
-    emulator.advance();
-    Instruction::try_from(opcode)
 }

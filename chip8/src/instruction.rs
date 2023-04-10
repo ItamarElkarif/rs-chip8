@@ -160,10 +160,7 @@ impl TryFrom<(u8, u8)> for Instruction {
     }
 }
 
-pub fn execute_instruction(
-    emulator: &mut Chip8,
-    instruction: Instruction,
-) -> Result<(), Box<dyn Error>> {
+pub fn execute(emulator: &mut Chip8, instruction: Instruction) -> Result<(), Box<dyn Error>> {
     match instruction {
         Instruction::CLS => {
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
@@ -317,6 +314,15 @@ pub fn execute_instruction(
     Ok(())
 }
 
+pub fn read(emulator: &mut Chip8) -> Result<Instruction, Box<dyn Error>> {
+    let opcode: (u8, u8) = (
+        emulator.memory[emulator.pc as usize],
+        emulator.memory[emulator.pc as usize + 1],
+    );
+    emulator.advance();
+    Instruction::try_from(opcode)
+}
+
 // TODO: Think about something better than looping bits, yach
 fn drw(emulator: &mut Chip8, vx: RegIndex, vy: RegIndex, n: u8) -> Result<(), Box<dyn Error>> {
     let x_pos = emulator.registers[vx];
@@ -365,7 +371,7 @@ mod tests {
         chip.registers[RegIndex(1)] = 3;
         chip.i = ROM_START as _;
         chip.memory[ROM_START..ROM_START + 4].copy_from_slice(&[255, 0, 255, 255]);
-        execute_instruction(&mut chip, Instruction::DRW(RegIndex(0), RegIndex(1), 4)).unwrap();
+        execute(&mut chip, Instruction::DRW(RegIndex(0), RegIndex(1), 4)).unwrap();
         for row in &[3, 5, 6] {
             assert_eq!(
                 chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
@@ -377,7 +383,19 @@ mod tests {
     #[test]
     fn test_set_i_sprite() {
         let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
-        execute_instruction(&mut chip, Instruction::LDISPRITE(3)).unwrap();
+        chip.registers[RegIndex(0)] = 3;
+        execute(&mut chip, Instruction::LDISPRITE(RegIndex(0))).unwrap();
+        assert_eq!(chip.i, 5 * 3);
+        assert_eq!(
+            &chip.memory[chip.i as usize..chip.i as usize + 5],
+            &[0xF0, 0x10, 0xF0, 0x10, 0xF0]
+        );
+    }
+
+    #[test]
+    fn test_call_ret() {
+        let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
+        execute(&mut chip, Instruction::LDISPRITE(RegIndex(0))).unwrap();
         assert_eq!(chip.i, 5 * 3);
         assert_eq!(
             &chip.memory[chip.i as usize..chip.i as usize + 5],
