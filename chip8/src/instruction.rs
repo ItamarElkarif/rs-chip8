@@ -243,7 +243,7 @@ pub fn execute(
                     break;
                 }
             }
-            Ok(Duration::from_micros(200))
+            Ok(Duration::ZERO)
         }
         Instruction::LDREGDT(vx) => {
             emulator.registers[vx] = emulator.delay_timer;

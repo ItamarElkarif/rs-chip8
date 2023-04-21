@@ -21,7 +21,9 @@ impl eframe::App for App {
         if self.chip.updated_display() {
             self.chip.reset_updated();
         }
-        ctx.request_repaint_after(FRAME_DURATION);
+
+        std::thread::sleep(FRAME_DURATION);
+        ctx.request_repaint();
     }
 }
 

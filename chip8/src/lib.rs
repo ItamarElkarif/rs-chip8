@@ -1,9 +1,9 @@
 #![allow(dead_code)]
-use std::{cmp::max, error::Error, time::Duration};
+use std::{error::Error, time::Duration};
 
 pub const MEM_SIZE: usize = 4 * 1024;
 pub const ROM_START: usize = 0x200;
-pub const FRAME_DURATION: Duration = Duration::from_millis(17);
+pub const FRAME_DURATION: Duration = Duration::from_micros(16666);
 
 mod display;
 mod instruction;
@@ -83,27 +83,18 @@ impl Chip8 {
     // TODO: should return the display, and while dropped Frame reset the display
     // Make the return type an Result<Option<Display>, Box<dyn Error>> and NONE if not changed
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
-        let mut duration_left = FRAME_DURATION;
-        while duration_left > Duration::ZERO {
+        let mut remaining = FRAME_DURATION;
+        while remaining > Duration::ZERO {
+            self.delay_timer = self.delay_timer.saturating_sub(1);
+            //TODO: beep
+            self.sound_timer = self.sound_timer.saturating_sub(1);
             let inst = instruction::read(self)?;
 
             let took = execute(self, inst)?;
 
-            duration_left = duration_left.saturating_sub(took);
-            update_timer(&mut self.delay_timer, duration_left);
-
-            //TODO: beep
-            update_timer(&mut self.sound_timer, duration_left);
+            remaining = remaining.saturating_sub(took);
+            
         }
         Ok(())
-    }
-}
-
-fn update_timer(timer: &mut u8, left: Duration) {
-    let delta_time = max(left.as_millis() * 1000 / 60, 0) as u8;
-    if *timer > delta_time {
-        *timer -= delta_time;
-    } else {
-        *timer = 0;
     }
 }
