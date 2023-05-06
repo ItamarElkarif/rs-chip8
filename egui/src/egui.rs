@@ -8,7 +8,7 @@ pub struct App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let keys_buffer: ChipInput = (&ctx.input().keys_down).into();
+        let keys_buffer = ctx.input(|i| ChipInput::from(&i.keys_down));
 
         self.chip.set_keypad(keys_buffer.0);
         self.chip.run_frame().unwrap();
@@ -62,7 +62,8 @@ impl crate::Ui for App {
             "Chip8",
             eframe::NativeOptions::default(),
             Box::new(|_| Box::new(App { chip })),
-        );
+        )
+        .unwrap();
     }
 }
 

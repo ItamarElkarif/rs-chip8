@@ -1,9 +1,9 @@
 [package]
-name = "sdl"
+name = "egui"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 chip8 = { path = "../chip8" }
-eframe = "0.20.1"
-egui = "0.20.1"
+eframe = "0.21.3"
+egui = "0.21.0"

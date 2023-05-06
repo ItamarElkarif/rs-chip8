@@ -24,7 +24,7 @@ pub struct Chip8 {
     pc: u16,
     i: u16,
     stack: Stack,
-    delay_timer: u8, // TODO: Maybe atomic? need to decrement it in another thread
+    delay_timer: u8,
     sound_timer: u8,
     keypad: u16, // TODO: use bitflags
     registers: Regs,
@@ -85,16 +85,15 @@ impl Chip8 {
     pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
         let mut remaining = FRAME_DURATION;
         while remaining > Duration::ZERO {
-            self.delay_timer = self.delay_timer.saturating_sub(1);
-            //TODO: beep
-            self.sound_timer = self.sound_timer.saturating_sub(1);
             let inst = instruction::read(self)?;
 
             let took = execute(self, inst)?;
 
             remaining = remaining.saturating_sub(took);
-            
         }
+        self.delay_timer = self.delay_timer.saturating_sub(1);
+        //TODO: beep
+        self.sound_timer = self.sound_timer.saturating_sub(1);
         Ok(())
     }
 }

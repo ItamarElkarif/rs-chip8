@@ -16,6 +16,5 @@ fn main() -> Result<(), Box<dyn Error>> {
     let chip = Chip8::new(&rom[..])?;
 
     egui::App::run(chip);
-    println!("HIIIIII");
     Ok(())
 }
