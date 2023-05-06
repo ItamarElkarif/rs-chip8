@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chip8::{Chip8, FRAME_DURATION, SCREEN_HEIGHT, SCREEN_WIDTH};
+use chip8::{Chip8, Display, FRAME_DURATION, SCREEN_HEIGHT, SCREEN_WIDTH};
 use egui::*;
 pub struct App {
     chip: Chip8,
@@ -11,16 +11,13 @@ impl eframe::App for App {
         let keys_buffer = ctx.input(|i| ChipInput::from(&i.keys_down));
 
         self.chip.set_keypad(keys_buffer.0);
-        self.chip.run_frame().unwrap();
 
-        //TODO: Beep if needed
+        let display = self.chip.run_frame().unwrap();
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.display_screen(ui);
+            App::display_screen(ui, display);
         });
 
-        if self.chip.updated_display() {
-            self.chip.reset_updated();
-        }
+        //TODO: Beep if needed
 
         std::thread::sleep(FRAME_DURATION);
         ctx.request_repaint();
@@ -28,7 +25,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    fn display_screen(&mut self, ui: &mut Ui) {
+    fn display_screen(ui: &mut Ui, display: &Display) {
         let tile_width = ui.available_width() / (SCREEN_WIDTH - 1) as f32;
         let tile_height = ui.available_height() / (SCREEN_HEIGHT - 1) as f32;
         for row in 0..SCREEN_WIDTH {
@@ -44,7 +41,7 @@ impl App {
                         },
                     },
                     Rounding::none(),
-                    if self.chip.display()[row + col * SCREEN_WIDTH] {
+                    if display[row + col * SCREEN_WIDTH] {
                         Color32::WHITE
                     } else {
                         Color32::BLACK

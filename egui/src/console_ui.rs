@@ -1,6 +1,8 @@
+use chip8::{Display, FRAME_DURATION};
+
 pub struct ConsoleUI();
 impl ConsoleUI {
-    fn update(display: &chip8::DisplayData) {
+    fn update(display: &Display) {
         print!("{esc}c", esc = 27 as char);
         for row in display.chunks(chip8::SCREEN_WIDTH) {
             println!(
@@ -21,12 +23,10 @@ impl ConsoleUI {
 impl crate::Ui for ConsoleUI {
     fn run(mut chip: chip8::Chip8) {
         loop {
-            chip.run_frame().unwrap();
-            if chip.updated_display() {
-                chip.reset_updated();
-                ConsoleUI::update(chip.display());
-            }
-            // std::thread::sleep(Duration::from_millis(17));
+            let display = chip.run_frame().unwrap();
+            ConsoleUI::update(display);
+
+            std::thread::sleep(FRAME_DURATION);
         }
     }
 }

@@ -207,7 +207,6 @@ pub fn execute(
             Ok(Duration::from_micros(605))
         }
         Instruction::LDStoreBCD(vx) => {
-            // TODO: Test, not sure if works
             let bcd = emulator.registers[vx];
             emulator.memory[emulator.i as usize] = bcd / 100;
             emulator.memory[emulator.i as usize + 1] = bcd % 100 / 10;
@@ -396,7 +395,7 @@ fn drw(emulator: &mut Chip8, vx: RegIndex, vy: RegIndex, n: u8) -> Result<(), Bo
             let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
 
             // If the xor going to erase the pixel (1^1), turn on the collision VF
-            if new_pixel & emulator.display.data()[location] {
+            if new_pixel & emulator.display.data[location] {
                 collision = true;
             }
             emulator.display.mut_data_to_update()[location] ^= new_pixel;
@@ -411,12 +410,6 @@ mod tests {
     use super::*;
     use crate::*;
 
-    struct MockUI;
-    impl UI for MockUI {
-        fn update(&mut self, _: &DisplayData) {}
-        fn beep(&self) {}
-    }
-
     #[test]
     fn test_drw() {
         let mut chip = Chip8::new(&[0u8; 3584][..]).unwrap();
@@ -427,7 +420,7 @@ mod tests {
         execute(&mut chip, Instruction::DRW(RegIndex(0), RegIndex(1), 4)).unwrap();
         for row in &[3, 5, 6] {
             assert_eq!(
-                chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
+                chip.display.data[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
                 [true, true, true, true, true, true, true, true]
             );
         }

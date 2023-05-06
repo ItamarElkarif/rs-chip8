@@ -11,8 +11,7 @@ mod registers;
 mod resources;
 mod stack;
 
-use display::Display;
-pub use display::{DisplayData, SCREEN_HEIGHT, SCREEN_WIDTH, UI};
+pub use display::{Display, SCREEN_HEIGHT, SCREEN_WIDTH};
 use instruction::execute;
 use registers::Regs;
 use resources::SPRITE_ADDR;
@@ -62,27 +61,13 @@ impl Chip8 {
     }
 }
 
-impl Chip8 {
-    pub fn display(&self) -> &DisplayData {
-        self.display.data()
-    }
-
-    // TODO: make it automatic after using it in the exe
-    pub fn reset_updated(&mut self) {
-        self.display.reset_updated()
-    }
-
-    pub fn updated_display(&self) -> bool {
-        self.display.updated()
-    }
-
+impl<'a> Chip8 {
     pub fn advance(&mut self) {
         self.pc += 2;
     }
 
-    // TODO: should return the display, and while dropped Frame reset the display
-    // Make the return type an Result<Option<Display>, Box<dyn Error>> and NONE if not changed
-    pub fn run_frame(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn run_frame(&'a mut self) -> Result<&'a Display, Box<dyn Error>> {
+        self.display.should_redrew = false;
         let mut remaining = FRAME_DURATION;
         while remaining > Duration::ZERO {
             let inst = instruction::read(self)?;
@@ -94,6 +79,7 @@ impl Chip8 {
         self.delay_timer = self.delay_timer.saturating_sub(1);
         //TODO: beep
         self.sound_timer = self.sound_timer.saturating_sub(1);
-        Ok(())
+
+        Ok(&self.display)
     }
 }

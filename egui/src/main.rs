@@ -6,6 +6,7 @@ use chip8::{Chip8, MEM_SIZE};
 
 use std::{error::Error, fs::File, io::Read, path::Path};
 
+// TODO: Make use of it? the main should have a UI and run it with the chip maybe
 trait Ui {
     fn run(chip: Chip8);
 }
