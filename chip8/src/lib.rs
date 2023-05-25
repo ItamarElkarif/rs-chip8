@@ -69,6 +69,7 @@ impl<'a> Chip8 {
     pub fn run_frame(&'a mut self) -> Result<&'a Display, Box<dyn Error>> {
         self.display.should_redrew = false;
         let mut remaining = FRAME_DURATION;
+
         while remaining > Duration::ZERO {
             let inst = instruction::read(self)?;
 
@@ -76,8 +77,9 @@ impl<'a> Chip8 {
 
             remaining = remaining.saturating_sub(took);
         }
+
         self.delay_timer = self.delay_timer.saturating_sub(1);
-        //TODO: beep
+        //TODO: beep if positive
         self.sound_timer = self.sound_timer.saturating_sub(1);
 
         Ok(&self.display)
