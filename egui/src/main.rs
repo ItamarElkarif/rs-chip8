@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut rom = Vec::with_capacity(MEM_SIZE);
 
     File::open(Path::new(&file))?.read_to_end(&mut rom)?;
-    let chip = Chip8::new(&rom[..])?;
+    let chip = Chip8::new(rom.as_slice())?;
 
     egui::App::run(chip);
     Ok(())

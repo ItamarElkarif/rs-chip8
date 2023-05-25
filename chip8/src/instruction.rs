@@ -169,6 +169,7 @@ pub fn execute(
             *emulator.display.mut_data_to_update() = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
             Ok(Duration::from_micros(109))
         }
+
         Instruction::RET => {
             emulator.pc = emulator
                 .stack
@@ -176,11 +177,13 @@ pub fn execute(
                 .ok_or("Can't return root function, the stack is empty")?;
             Ok(Duration::from_micros(105))
         }
+
         Instruction::SysJump(_) => unreachable!(),
         Instruction::JP(addr) => {
             emulator.pc = addr;
             Ok(Duration::from_micros(105))
         }
+
         Instruction::LDReadRegisters(v_count) => {
             let init = emulator.i as usize;
             let data = &emulator
@@ -192,9 +195,10 @@ pub fn execute(
             }
             Ok(Duration::from_micros(605))
         }
+
         Instruction::LDStoreRegisters(v_count) => {
             let init = emulator.i as usize;
-            let data = emulator
+            let mem = emulator
                 .memory
                 .get_mut(init..init + v_count as usize + 1)
                 .ok_or("I Pointer got out of bound")?;
@@ -202,10 +206,11 @@ pub fn execute(
                 .iter()
                 .enumerate()
             {
-                data[i] = *byte;
+                mem[i] = *byte;
             }
             Ok(Duration::from_micros(605))
         }
+
         Instruction::LDStoreBCD(vx) => {
             let bcd = emulator.registers[vx];
             emulator.memory[emulator.i as usize] = bcd / 100;
@@ -213,22 +218,27 @@ pub fn execute(
             emulator.memory[emulator.i as usize + 2] = bcd % 10;
             Ok(Duration::from_micros(927))
         }
+
         Instruction::LDISPRITE(vx) => {
             emulator.i = emulator.registers[vx] as u16 * 5;
             Ok(Duration::from_micros(91))
         }
+
         Instruction::ADDI(vx) => {
             emulator.i += emulator.registers[vx] as u16;
             Ok(Duration::from_micros(86))
         }
+
         Instruction::LDSTREG(vx) => {
             emulator.sound_timer = emulator.registers[vx];
             Ok(Duration::from_micros(45))
         }
+
         Instruction::LDDTREG(vx) => {
             emulator.delay_timer = emulator.registers[vx];
             Ok(Duration::from_micros(45))
         }
+
         Instruction::LDREGKEY(vx) => {
             let keypad = emulator.keypad;
             if keypad == 0 {
@@ -244,44 +254,53 @@ pub fn execute(
             }
             Ok(Duration::ZERO)
         }
+
         Instruction::LDREGDT(vx) => {
             emulator.registers[vx] = emulator.delay_timer;
             Ok(Duration::from_micros(45))
         }
+
         Instruction::SKNP(vx) => {
             if (1 << emulator.registers[vx] & emulator.keypad) == 0 {
                 emulator.advance();
             }
             Ok(Duration::from_micros(73))
         }
+
         Instruction::SKP(vx) => {
             if (1 << emulator.registers[vx] & emulator.keypad) != 0 {
                 emulator.advance();
             }
             Ok(Duration::from_micros(73))
         }
+
         Instruction::DRW(vx, vy, n) => {
             drw(emulator, vx, vy, n)?;
 
             Ok(Duration::from_micros(22734))
         }
+
         Instruction::RND(vx, max) => {
             emulator.registers[vx] = rand::random::<u8>() & max;
             Ok(Duration::from_micros(164))
         }
+
         Instruction::LDIAddr(addr) => {
             emulator.i = addr;
             Ok(Duration::from_micros(55))
         }
+
         Instruction::V0JP(addr) => {
             emulator.pc = addr + emulator.registers[RegIndex(0)] as u16;
             Ok(Duration::from_micros(105))
         }
+
         Instruction::SHL(vx, _) => {
             emulator.registers[RegIndex(0xF)] = (emulator.registers[vx] & 0b1000000 != 0) as u8;
             emulator.registers[vx] <<= 1;
             Ok(Duration::from_micros(200))
         }
+
         Instruction::SUBN(vx, vy) => {
             let x = emulator.registers[vx];
             let y = emulator.registers[vy];
@@ -289,11 +308,13 @@ pub fn execute(
             emulator.registers[vx] = y - x;
             Ok(Duration::from_micros(200))
         }
+
         Instruction::SHR(vx, _) => {
             emulator.registers[RegIndex(0xF)] = emulator.registers[vx] & 0b1;
             emulator.registers[vx] >>= 1;
             Ok(Duration::from_micros(200))
         }
+
         Instruction::SUB(vx, vy) => {
             let x = emulator.registers[vx];
             let y = emulator.registers[vy];
@@ -301,62 +322,74 @@ pub fn execute(
             (emulator.registers[vx], _) = emulator.registers[vx].overflowing_sub(y);
             Ok(Duration::from_micros(200))
         }
+
         Instruction::XOR(vx, vy) => {
             emulator.registers[vx] ^= emulator.registers[vy];
             Ok(Duration::from_micros(200))
         }
+
         Instruction::AND(vx, vy) => {
             emulator.registers[vx] &= emulator.registers[vy];
             Ok(Duration::from_micros(200))
         }
+
         Instruction::OR(vx, vy) => {
             emulator.registers[vx] |= emulator.registers[vy];
             Ok(Duration::from_micros(200))
         }
+
         Instruction::LDREGByte(vx, val) => {
             emulator.registers[vx] = val;
             Ok(Duration::from_micros(27))
         }
+
         Instruction::ADD(vx, val) => {
             let (res, _overflow) = emulator.registers[vx].overflowing_add(val);
             emulator.registers[vx] = res;
             // emulator.registers[RegIndex(0xF)] = overflow as u8;
             Ok(Duration::from_micros(45))
         }
+
         Instruction::ADDCARRIED(vx, vy) => {
             let (res, overflow) = emulator.registers[vx].overflowing_add(emulator.registers[vy]);
             emulator.registers[vx] = res;
             emulator.registers[RegIndex(0xF)] = overflow as u8;
             Ok(Duration::from_micros(200))
         }
+
         Instruction::LDREGS(vx, vy) => {
             emulator.registers[vx] = emulator.registers[vy];
             Ok(Duration::from_micros(200))
         }
+
         Instruction::SEREGS(vx, vy) => {
             if emulator.registers[vx] == emulator.registers[vy] {
                 emulator.advance()
             }
             Ok(Duration::from_micros(73))
         }
+
         Instruction::SNE(vx, val) => {
             if emulator.registers[vx] != (val) {
                 emulator.advance()
             }
             Ok(Duration::from_micros(55))
         }
+
         Instruction::SEByte(vx, val) => {
             if emulator.registers[vx] == val {
                 emulator.advance();
             }
             Ok(Duration::from_micros(55))
         }
+
         Instruction::CALL(addr) => {
             // Since I'm advancing the pc before the instruction, pc will be at least 2
             emulator.stack.push(emulator.pc)?;
             emulator.pc = addr;
             Ok(Duration::from_micros(105))
         }
+
         Instruction::SNEREG(vx, vy) => {
             if emulator.registers[vx] != emulator.registers[vy] {
                 emulator.advance();
@@ -380,10 +413,11 @@ fn drw(emulator: &mut Chip8, vx: RegIndex, vy: RegIndex, n: u8) -> Result<(), Bo
     let x_pos = emulator.registers[vx];
     let y_pos = emulator.registers[vy];
     let mut collision = false;
-    let n = n & 15;
+    let rows = n & 15;
+
     let sprite = emulator
         .memory
-        .get(emulator.i as usize..(emulator.i + n as u16) as usize)
+        .get(emulator.i as usize..(emulator.i + rows as u16) as usize)
         .ok_or("I pointer got out of bound")?;
 
     for (i, pixel) in sprite.iter().enumerate() {
@@ -395,7 +429,7 @@ fn drw(emulator: &mut Chip8, vx: RegIndex, vy: RegIndex, n: u8) -> Result<(), Bo
             let new_pixel = (pixel & (0b1 << (7 - bit))) != 0;
 
             // If the xor going to erase the pixel (1^1), turn on the collision VF
-            if new_pixel & emulator.display.data[location] {
+            if new_pixel & emulator.display.data()[location] {
                 collision = true;
             }
             emulator.display.mut_data_to_update()[location] ^= new_pixel;
@@ -420,7 +454,7 @@ mod tests {
         execute(&mut chip, Instruction::DRW(RegIndex(0), RegIndex(1), 4)).unwrap();
         for row in &[3, 5, 6] {
             assert_eq!(
-                chip.display.data[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
+                chip.display.data()[row * SCREEN_WIDTH + 2..row * SCREEN_WIDTH + 8 + 2],
                 [true, true, true, true, true, true, true, true]
             );
         }

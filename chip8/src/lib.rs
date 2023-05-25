@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use std::{error::Error, time::Duration};
 
+const ROM_START: usize = 0x200;
 pub const MEM_SIZE: usize = 4 * 1024;
-pub const ROM_START: usize = 0x200;
 pub const FRAME_DURATION: Duration = Duration::from_micros(16666);
 
 mod display;
@@ -21,6 +21,7 @@ pub struct Chip8 {
     memory: [u8; MEM_SIZE],
     display: Display,
     pc: u16,
+    // TODO: Consider make it usize for indexing easier
     i: u16,
     stack: Stack,
     delay_timer: u8,
@@ -29,19 +30,20 @@ pub struct Chip8 {
     registers: Regs,
 }
 
-fn load_rom(mem: &mut [u8], input: &[u8]) -> Result<(), Box<dyn Error>> {
-    if mem.len() < ROM_START + input.len() {
-        return Err("The rom is too small!".into());
+fn load_rom(mem: &mut [u8], file: &[u8]) -> Result<(), Box<dyn Error>> {
+    if mem.len() < ROM_START + file.len() {
+        return Err(format!("The file is too big! {}", file.len()).into());
     }
-    mem[ROM_START..ROM_START + input.len()].copy_from_slice(input);
+    mem[ROM_START..ROM_START + file.len()].copy_from_slice(file);
     Ok(())
 }
 
 impl Chip8 {
-    pub fn new<'a>(file: impl Into<&'a [u8]>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(file: &[u8]) -> Result<Self, Box<dyn Error>> {
+        // TODO: Find a way to do it const
         let mut mem = [0; MEM_SIZE];
         mem[0..0x10 * 5].copy_from_slice(&SPRITE_ADDR);
-        load_rom(&mut mem, file.into())?;
+        load_rom(&mut mem, file)?;
 
         Ok(Self {
             memory: mem,
@@ -59,15 +61,15 @@ impl Chip8 {
     pub fn set_keypad(&mut self, new: u16) {
         self.keypad = new;
     }
+
+    fn advance(&mut self) {
+        self.pc += 2;
+    }
 }
 
 impl<'a> Chip8 {
-    pub fn advance(&mut self) {
-        self.pc += 2;
-    }
-
     pub fn run_frame(&'a mut self) -> Result<&'a Display, Box<dyn Error>> {
-        self.display.should_redrew = false;
+        self.display.reset_redraw();
         let mut remaining = FRAME_DURATION;
 
         while remaining > Duration::ZERO {
