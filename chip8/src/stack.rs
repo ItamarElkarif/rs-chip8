@@ -26,13 +26,6 @@ impl Stack {
             }
         }
     }
-
-    pub fn top(&self) -> Option<u16> {
-        match self.sp {
-            0 => None,
-            _ => Some(self.storage[self.sp - 1]),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -64,14 +57,5 @@ mod tests {
         for i in 0..(s.storage.len() + 1) as u16 {
             assert_eq!(Ok(()), s.push(i));
         }
-    }
-
-    #[test]
-    fn top() {
-        let mut s = Stack::default();
-        s.push(6).unwrap();
-        assert_eq!(Some(6), s.top());
-        s.pop().unwrap();
-        assert_eq!(None, s.top());
     }
 }

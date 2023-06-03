@@ -6,7 +6,7 @@ use chip8::{Chip8, MEM_SIZE};
 
 use std::{env::args, error::Error, fs::File, io::Read, path::Path};
 
-// TODO: Make use of it? the main should have a UI and run it with the chip maybe
+// TODO: Delete this? seems unnecessary
 trait Ui {
     fn run(chip: Chip8);
 }

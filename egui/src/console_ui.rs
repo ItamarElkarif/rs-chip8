@@ -23,7 +23,7 @@ impl ConsoleUI {
 impl crate::Ui for ConsoleUI {
     fn run(mut chip: chip8::Chip8) {
         loop {
-            let display = chip.run_frame().unwrap();
+            let (display, _) = chip.run_frame().unwrap();
             ConsoleUI::update(display);
 
             std::thread::sleep(FRAME_DURATION);

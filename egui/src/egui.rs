@@ -1,18 +1,29 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Deref};
 
 use chip8::{Chip8, Display, FRAME_DURATION, SCREEN_HEIGHT, SCREEN_WIDTH};
-use egui::*;
+use egui::{epaint::RectShape, *};
 pub struct App {
     chip: Chip8,
 }
 
+impl crate::Ui for App {
+    fn run(chip: Chip8) {
+        eframe::run_native(
+            "Chip8",
+            eframe::NativeOptions::default(),
+            Box::new(|_| Box::new(App { chip })),
+        )
+        .unwrap();
+    }
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let keys_buffer = ctx.input(|i| ChipInput::from(&i.keys_down));
+        let keys = ctx.input(|i| ChipInput::from(&i.keys_down));
 
-        self.chip.set_keypad(keys_buffer.0);
+        self.chip.set_keypad(*keys);
 
-        let display = self.chip.run_frame().unwrap();
+        let (display, _beep) = self.chip.run_frame().unwrap();
         egui::CentralPanel::default().show(ctx, |ui| {
             App::display_screen(ui, display);
         });
@@ -32,63 +43,77 @@ impl App {
             let x = tile_width * row as f32;
             for col in 0..SCREEN_HEIGHT {
                 let y = tile_height * col as f32;
-                ui.painter().rect(
-                    Rect {
-                        min: Pos2 { x, y },
-                        max: Pos2 {
-                            x: x + tile_width,
-                            y: y + tile_height,
-                        },
-                    },
-                    Rounding::none(),
-                    if display[row + col * SCREEN_WIDTH] {
-                        Color32::WHITE
-                    } else {
-                        Color32::BLACK
-                    },
-                    Stroke::NONE,
-                );
+                ui.painter().add(tile(
+                    x,
+                    y,
+                    tile_width,
+                    tile_height,
+                    display[row + col * SCREEN_WIDTH],
+                ));
             }
         }
     }
 }
 
-impl crate::Ui for App {
-    fn run(chip: Chip8) {
-        eframe::run_native(
-            "Chip8",
-            eframe::NativeOptions::default(),
-            Box::new(|_| Box::new(App { chip })),
-        )
-        .unwrap();
+fn tile(x: f32, y: f32, width: f32, height: f32, active: bool) -> RectShape {
+    RectShape {
+        rect: Rect {
+            min: Pos2 { x, y },
+            max: Pos2 {
+                x: x + width,
+                y: y + height,
+            },
+        },
+        rounding: Rounding::none(),
+        fill: if active {
+            Color32::WHITE
+        } else {
+            Color32::BLACK
+        },
+        stroke: Stroke::NONE,
     }
 }
 
 #[derive(Debug)]
 struct ChipInput(u16);
+impl Deref for ChipInput {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+macro_rules! keysAt {
+    ($key:expr, $($variant:pat, $at:expr);+) => {
+        match $key {
+           $($variant => 1 << $at,)+
+           _ => 0,
+        }
+    };
+}
+
 impl From<&HashSet<Key>> for ChipInput {
     fn from(keys: &HashSet<Key>) -> Self {
         let mut keys_buffer: u16 = 0;
         for key in keys {
-            keys_buffer |= match key {
-                Key::Num1 => 1 << 0x1,
-                Key::Num2 => 1 << 0x2,
-                Key::Num3 => 1 << 0x3,
-                Key::Num4 => 1 << 0xC,
-                Key::Q => 1 << 0x4,
-                Key::W => 1 << 0x5,
-                Key::E => 1 << 0x6,
-                Key::R => 1 << 0xD,
-                Key::A => 1 << 0x7,
-                Key::S => 1 << 0x8,
-                Key::D => 1 << 0x9,
-                Key::F => 1 << 0xE,
-                Key::Z => 1 << 0xA,
-                Key::X => 1 << 0x0,
-                Key::C => 1 << 0xB,
-                Key::V => 1 << 0xF,
-                _ => 0,
-            }
+            keys_buffer |= keysAt!(key, 
+            Key::Num1, 0x1;
+            Key::Num2, 0x2;
+            Key::Num3, 0x3;
+            Key::Num4, 0xC;
+            Key::Q, 0x4;
+            Key::W, 0x5;
+            Key::E, 0x6;
+            Key::R, 0xD;
+            Key::A, 0x7;
+            Key::S, 0x8;
+            Key::D, 0x9;
+            Key::F, 0xE;
+            Key::Z, 0xA;
+            Key::X, 0x0;
+            Key::C, 0xB;
+            Key::V, 0xF);
         }
         ChipInput(keys_buffer)
     }

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::{error::Error, time::Duration};
 
 const ROM_START: usize = 0x200;
@@ -21,21 +20,12 @@ pub struct Chip8 {
     memory: [u8; MEM_SIZE],
     display: Display,
     pc: u16,
-    // TODO: Consider make it usize for indexing easier
-    i: u16,
+    i: usize,
     stack: Stack,
     delay_timer: u8,
     sound_timer: u8,
     keypad: u16, // TODO: use bitflags
     registers: Regs,
-}
-
-fn load_rom(mem: &mut [u8], file: &[u8]) -> Result<(), Box<dyn Error>> {
-    if mem.len() < ROM_START + file.len() {
-        return Err(format!("The file is too big! {}", file.len()).into());
-    }
-    mem[ROM_START..ROM_START + file.len()].copy_from_slice(file);
-    Ok(())
 }
 
 impl Chip8 {
@@ -68,7 +58,7 @@ impl Chip8 {
 }
 
 impl<'a> Chip8 {
-    pub fn run_frame(&'a mut self) -> Result<&'a Display, Box<dyn Error>> {
+    pub fn run_frame(&'a mut self) -> Result<(&'a Display, Option<Duration>), Box<dyn Error>> {
         self.display.reset_redraw();
         let mut remaining = FRAME_DURATION;
 
@@ -81,9 +71,17 @@ impl<'a> Chip8 {
         }
 
         self.delay_timer = self.delay_timer.saturating_sub(1);
-        //TODO: beep if positive
         self.sound_timer = self.sound_timer.saturating_sub(1);
 
-        Ok(&self.display)
+        let beep = (self.sound_timer != 0).then_some(FRAME_DURATION * self.sound_timer as u32);
+        Ok((&self.display, beep))
     }
+}
+
+fn load_rom(mem: &mut [u8], file: &[u8]) -> Result<(), Box<dyn Error>> {
+    if mem.len() < ROM_START + file.len() {
+        return Err(format!("The file is too big! {}", file.len()).into());
+    }
+    mem[ROM_START..ROM_START + file.len()].copy_from_slice(file);
+    Ok(())
 }

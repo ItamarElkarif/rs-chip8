@@ -2,7 +2,10 @@ use std::ops::Deref;
 
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
-pub type DisplayData = [bool; SCREEN_WIDTH * SCREEN_HEIGHT];
+pub const fn screen_size() -> usize {
+    SCREEN_HEIGHT * SCREEN_WIDTH
+}
+pub type DisplayData = [bool; screen_size()];
 
 pub struct Display {
     data: DisplayData,
@@ -10,7 +13,7 @@ pub struct Display {
 }
 
 impl Display {
-    pub fn data(&self) -> [bool; SCREEN_WIDTH * SCREEN_HEIGHT] {
+    pub fn data(&self) -> [bool; screen_size()] {
         self.data
     }
 
@@ -31,7 +34,7 @@ impl Display {
 impl Default for Display {
     fn default() -> Display {
         Display {
-            data: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
+            data: [false; screen_size()],
             should_redraw: false,
         }
     }
